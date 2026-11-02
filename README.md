@@ -89,7 +89,7 @@ Files it writes:
 - `maps/<floor>.webp`: the plan picture with colours muted (walls untouched). Loaded first.
 - `maps/<floor>-labels.webp`: everything you drew in Canva (text, pins, arrows, boxes), on a transparent background, separated from the plan picture. Loaded first.
 - `maps/<floor>-full.webp`: the plan picture in full colour; only fetched when something on that floor is highlighted, and only shown inside the highlighted shapes.
-- Canva boxes that hide closed areas are kept fully visible in the label layer, so fading labels never reveals what they cover.
+- Solid grey/white boxes drawn in Canva over the plan (e.g. hiding closed areas) are painted into the plan layers, so they are muted and dimmed with the plan and fading labels never reveals what they cover. Boxes that don't actually show in the PDF are ignored.
 - `source/raster/<floor>.png` + `source/raster/rasters.json`: high-res copies with pixel sizes, kept for the layout planner (not loaded by the page).
 - `import/overlay.generated.json`: raw import result.
 - `data/overlay.json`: generated + overrides. **This is what the page reads.**

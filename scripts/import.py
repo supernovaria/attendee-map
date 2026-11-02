@@ -231,11 +231,14 @@ def find_pins(page, covers, fill, legend):
 
 
 def canva_covers(page, covers):
-    """Solid shapes drawn in Canva on top of the plan picture (e.g. grey boxes
-    hiding a staircase). Returns list of Rects."""
+    """Solid grey/white boxes drawn in Canva on top of the plan picture (e.g.
+    hiding a closed staircase) that are actually visible on the page.
+    Returns list of (Rect, fill)."""
     if not covers:
         return []
     img_seq = covers[0][0]
+    vs = 2
+    page_px = render(page, vs).astype(int)
     out = []
     for d in page.get_drawings():
         f = d.get("fill")
@@ -246,17 +249,28 @@ def canva_covers(page, covers):
         if max(f) - min(f) > 0.05:  # coloured = pins, legend swatches, icons
             continue
         r = d["rect"]
-        if r.width * r.height >= 100:
-            out.append(pymupdf.Rect(r))
+        if r.width * r.height < 100:
+            continue
+        # skip boxes that do not show on the page (clipped away / covered)
+        x0, y0, x1, y1 = [int(v * vs) for v in r]
+        patch = page_px[max(0, y0):y1, max(0, x0):x1].reshape(-1, 3)
+        if not len(patch) or (np.abs(patch - np.array(f) * 255).max(1) < 20).mean() < 0.3:
+            continue
+        if not any(pymupdf.Rect(r) == o[0] and tuple(f) == o[1] for o in out):
+            out.append((pymupdf.Rect(r), tuple(f)))
     return out
 
 
-def plan_only_render(doc, page, s):
-    """The plan picture alone, rendered by MuPDF exactly as on the page."""
+def plan_only_render(doc, page, s, boxes=()):
+    """The plan picture alone, rendered by MuPDF exactly as on the page, plus
+    the Canva boxes that hide parts of it (they belong to the plan, so they
+    get muted/dimmed with it)."""
     info = max(page.get_image_info(xrefs=True), key=lambda i: i["width"] * i["height"])
     tmp = pymupdf.open()
     tp = tmp.new_page(width=page.rect.width, height=page.rect.height)
     tp.insert_image(pymupdf.Rect(info["bbox"]), stream=doc.extract_image(info["xref"])["image"], keep_proportion=False)
+    for rect, fill in boxes:
+        tp.draw_rect(rect, color=None, fill=fill, overlay=True)
     return render(tp, s)
 
 
@@ -271,10 +285,9 @@ def mute(rgb):
     return (out.clip(0, 1) * 255).astype(np.uint8)
 
 
-def uncomposite(C, B, fixed, s):
+def uncomposite(C, B):
     """Split the page render C into plan B + a transparent layer F (RGBA) so
-    that F over B == C. Areas in `fixed` (Canva boxes hiding closed areas)
-    are kept fully opaque so they keep hiding whatever is underneath."""
+    that F over B == C."""
     Cf, Bf = C.astype(np.float32) / 255, B.astype(np.float32) / 255
     eps = 1e-6
     up = np.where(Cf > Bf, (Cf - Bf) / np.maximum(1 - Bf, eps), 0)
@@ -282,10 +295,6 @@ def uncomposite(C, B, fixed, s):
     a = np.clip(np.maximum(up, dn).max(2), 0, 1)
     a[np.abs(C.astype(int) - B.astype(int)).max(2) < 4] = 0
     F = np.where(a[..., None] > 0, Bf + (Cf - Bf) / np.maximum(a[..., None], eps), 0).clip(0, 1)
-    for r in fixed:
-        x0, y0, x1, y1 = [int(round(v * s)) for v in (r.x0, r.y0, r.x1, r.y1)]
-        a[max(0, y0):y1, max(0, x0):x1] = 1
-        F[max(0, y0):y1, max(0, x0):x1] = Cf[max(0, y0):y1, max(0, x0):x1]
     return (np.dstack([F, a]) * 255).round().astype(np.uint8)
 
 
@@ -631,7 +640,8 @@ def main():
             issue(fname, f'"{b["text"]}": placed at {how}. Check the position on site.')
 
         # 3. raster colour areas
-        cover_rects = canva_covers(page, covers)
+        cover_boxes = canva_covers(page, covers)
+        cover_rects = [r for r, _ in cover_boxes]
         for key in CFG["rasterKey"]:
             regs, small = colour_regions(plan, key["rgb"], key["tolerance"], scale, 40, exclude)
             regs.sort(key=lambda r: (r["pin"][1], r["pin"][0]))
@@ -711,14 +721,13 @@ def main():
 
         # 6. layers: muted plan, full-colour plan, transparent Canva layer
         C = render(page, bscale)
-        B = plan_only_render(doc, page, bscale)
+        B = plan_only_render(doc, page, bscale, cover_boxes)
         B[:int(CFG["titleMaxY"] * bscale)] = 255  # the plan picture's own logo sits under the Canva title
         Image.fromarray(mute(B)).save(MAPS_DIR / f"{fid}.webp", "WEBP", quality=74, method=6)
         Image.fromarray(B).save(MAPS_DIR / f"{fid}-full.webp", "WEBP", quality=74, method=6)
-        Image.fromarray(uncomposite(C, B, cover_rects, bscale), "RGBA").save(
+        Image.fromarray(uncomposite(C, B), "RGBA").save(
             MAPS_DIR / f"{fid}-labels.webp", "WEBP", quality=80, method=6)
         floor_rec["chromeBoxes"] = chrome
-        floor_rec["fixedBoxes"] = [xywh(tuple(r), 0) for r in cover_rects]
 
     # near-duplicate shades among vector fills vs key colours
     shade_check(doc, CFG)

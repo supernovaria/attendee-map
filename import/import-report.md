@@ -1,6 +1,6 @@
 # Import report
 
-Generated 2026-11-02T23:28:51+01:00 from `source/attendee-map.pdf` by `scripts/import.py`. Review pictures (every item drawn on the plan, red outline = shape, dot = pin, label = item id): [Ground floor](review/0.jpg), [1st floor](review/1.jpg), [2nd floor](review/2.jpg), [3rd floor](review/3.jpg).
+Generated 2026-11-02T23:56:06+01:00 from `source/attendee-map.pdf` by `scripts/import.py`. Review pictures (every item drawn on the plan, red outline = shape, dot = pin, label = item id): [Ground floor](review/0.jpg), [1st floor](review/1.jpg), [2nd floor](review/2.jpg), [3rd floor](review/3.jpg).
 
 ## What the PDF contains
 
