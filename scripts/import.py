@@ -298,6 +298,88 @@ def uncomposite(C, B):
     return (np.dstack([F, a]) * 255).round().astype(np.uint8)
 
 
+def leader_targets(layer, scale, label_bbox, text_boxes):
+    """Thin dark lines in the Canva layer that start at a label and point
+    somewhere (e.g. "Nap Rooms" outside the building, with lines to each
+    room). Returns [(end point, unit direction)] in pt."""
+    mask = ((layer[..., 3] > 60) & (layer[..., :3].max(2) < 120)).astype(np.uint8)
+    for bb in text_boxes:  # text itself would look like short lines
+        x0, y0, x1, y1 = [int(v * scale) for v in bb]
+        mask[max(0, y0 - 2):y1 + 2, max(0, x0 - 2):x1 + 2] = 0
+    segs = cv2.HoughLinesP(mask * 255, 1, np.pi / 360, threshold=30,
+                           minLineLength=int(20 * scale), maxLineGap=int(2 * scale))
+    out = []
+    for x1, y1, x2, y2 in ([] if segs is None else np.asarray(segs).reshape(-1, 4) / scale):
+        d1, d2 = rect_dist(x1, y1, label_bbox), rect_dist(x2, y2, label_bbox)
+        # one end at the label; rotated labels have big boxes, so the far end
+        # may still be close to the box - require a long line instead
+        if min(d1, d2) >= 10 or math.hypot(x2 - x1, y2 - y1) <= 20 or abs(d1 - d2) < 2:
+            continue
+        (nx, ny), (fx, fy) = ((x1, y1), (x2, y2)) if d1 < d2 else ((x2, y2), (x1, y1))
+        L = math.hypot(fx - nx, fy - ny)
+        out.append(((fx, fy), ((fx - nx) / L, (fy - ny) / L)))
+    # one target per line: segments pointing the same way are the same line
+    out.sort(key=lambda t: -rect_dist(t[0][0], t[0][1], label_bbox))
+    uniq = []
+    for t in out:
+        if all(abs(t[1][0] * u[1][0] + t[1][1] * u[1][1]) < 0.9986 for u in uniq):  # > ~3°
+            uniq.append(t)
+    return uniq
+
+
+def room_near(plan, pt, scale, page_area_pt2, DOOR=5, radius=15, _cache={}):
+    """The indoor room closest to `pt` (e.g. where a leader line ends on a
+    window). Outdoor space (touching the page edge) and huge areas are skipped."""
+    key = (id(plan), DOOR)
+    if key not in _cache:
+        _cache.clear()
+        free = (plan.min(2) > 225).astype(np.uint8)
+        r = int(DOOR * scale)
+        ker = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))
+        n, lab, stats, _ = cv2.connectedComponentsWithStats(cv2.erode(free, ker), 4)
+        Hh, Ww = lab.shape
+        ok = np.zeros(n, bool)
+        for i in range(1, n):
+            x, y, w, h, area = stats[i]
+            grown = area / scale / scale  # rough; checked again below
+            ok[i] = not (x <= r + 2 or y <= r + 2 or x + w >= Ww - r - 2 or y + h >= Hh - r - 2) and grown < 0.05 * page_area_pt2
+        _cache[key] = (free, ker, lab, ok)
+    free, ker, lab, ok = _cache[key]
+    R = int(radius * scale)
+    px, py = int(pt[0] * scale), int(pt[1] * scale)
+    y0, x0 = max(0, py - R), max(0, px - R)
+    win = lab[y0:py + R, x0:px + R]
+    ys, xs = np.nonzero(ok[win])
+    if not len(ys):
+        return None
+    j = np.argmin((ys + y0 - py) ** 2 + (xs + x0 - px) ** 2)
+    i = win[ys[j], xs[j]]
+    m = cv2.dilate((lab == i).astype(np.uint8), ker) & free
+    if m.sum() / scale / scale < 150:
+        return None
+    cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    return contour_to_poly(max(cnts, key=cv2.contourArea), scale, 1.5)
+
+
+def behind_wall(plan, scale, start, direction, max_pt=80):
+    """Walk from `start` along `direction` until a wall has been crossed;
+    return the first open-floor point behind it (where a leader line points)."""
+    H, W = plan.shape[:2]
+    crossed = False
+    for i in range(int(max_pt * 2)):
+        x = start[0] + direction[0] * i / 2
+        y = start[1] + direction[1] * i / 2
+        px, py = int(x * scale), int(y * scale)
+        if not (0 <= px < W and 0 <= py < H):
+            return None
+        v = int(plan[py, px].min())
+        if v < 140:
+            crossed = True
+        elif crossed and v > 225:
+            return (x + direction[0] * 3, y + direction[1] * 3)
+    return None
+
+
 def xywh(r, pad=2.0):
     x0, y0, x1, y1 = r
     return [r1(x0 - pad), r1(y0 - pad), r1(x1 - x0 + 2 * pad), r1(y1 - y0 + 2 * pad)]
@@ -410,17 +492,17 @@ def plan_canvas(doc, page, scale):
     return cv2.warpAffine(src, M, (W, H), flags=cv2.INTER_AREA, borderValue=(255, 255, 255))
 
 
-def room_shape(plan, seed_pt, scale, page_area_pt2):
+def room_shape(plan, seed_pt, scale, page_area_pt2, DOOR=13):
     """Fill the white room around a label. Doorways are closed first by
-    shrinking free space by DOOR pt, then the found room is grown back."""
-    DOOR = 13  # closes openings up to ~26 pt wide (double doors)
+    shrinking free space by DOOR pt (13 closes openings up to ~26 pt, i.e.
+    double doors), then the found room is grown back."""
     free = (plan.min(2) > 225).astype(np.uint8)
     r = int(DOOR * scale)
     ker = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))
     core = cv2.erode(free, ker)
     n, lab, stats, _ = cv2.connectedComponentsWithStats(core, 4)
     sx, sy = int(seed_pt[0] * scale), int(seed_pt[1] * scale)
-    R = int(25 * scale)
+    R = int(min(25, DOOR * 2) * scale)
     win = lab[max(0, sy - R):sy + R, max(0, sx - R):sx + R]
     ys, xs = np.nonzero(win)
     if not len(ys):
@@ -512,6 +594,7 @@ def main():
         }
         floors.append({
             "id": fid, "name": fname, "shortName": fl.get("shortName", fname), "order": fl["order"],
+            **({"color": fl["color"]} if fl.get("color") else {}),
             "background": f"maps/{fid}.webp",
             "backgroundHighlight": f"maps/{fid}-full.webp",
             "labels": f"maps/{fid}-labels.webp",
@@ -675,6 +758,15 @@ def main():
         for rgb, area in unkeyed_colours(plan, scale, CFG["rasterKey"] + CFG["ignoreRaster"], exclude):
             issue(fname, f"Colour #{rgb[0]:02X}{rgb[1]:02X}{rgb[2]:02X} covers ~{area:.0f} pt² but is not in the colour key.")
 
+        # layers (needed for leader lines; written to disk below)
+        C = render(page, bscale)
+        B = plan_only_render(doc, page, bscale, cover_boxes)
+        B[:int(CFG["titleMaxY"] * bscale)] = 255  # the plan picture's own logo sits under the Canva title
+        layer = uncomposite(C, B)
+        # per character, so a rotated label doesn't blank out a whole upright box
+        text_boxes = [ch["bbox"] for blk in page.get_text("rawdict")["blocks"] if blk["type"] == 0
+                      for ln in blk["lines"] for sp in ln["spans"] for ch in sp["chars"] if ch["c"].strip()]
+
         # 4. rooms
         no_shape = []
         for b in room_blocks:
@@ -698,6 +790,37 @@ def main():
                     poly, why = None, "outline found was smaller than the label (furniture/seats in the way?)"
             if poly:
                 it["shape"] = {"type": "polygon", "points": poly}
+            elif why == "label is outside the building":
+                # label outside the building: follow its leader lines to the rooms
+                polys = []
+                targets = leader_targets(layer, bscale, b["bbox"], text_boxes)
+                for (ex, ey), (ux, uy) in targets:
+                    def known(q):
+                        return any(math.dist(np.mean(q, 0), np.mean(o, 0)) < 5 for o in polys)
+                    # first: the room just behind the wall the line ends on;
+                    # if none (or already found): the indoor room nearest the line's end
+                    seed = behind_wall(plan, scale, (ex, ey), (ux, uy))
+                    pp = room_near(plan, seed, scale, W * H, radius=4) if seed else None
+                    if not pp or known(pp):
+                        pp = room_near(plan, (ex, ey), scale, W * H)
+                    if pp and not known(pp):
+                        polys.append(pp)
+                if polys:
+                    cx, cy = np.mean([np.mean(q, 0) for q in polys], 0)
+                    best = min(polys, key=lambda q: math.dist(np.mean(q, 0), (cx, cy)))
+                    m = np.zeros((int(H * scale), int(W * scale)), np.uint8)
+                    cv2.fillPoly(m, [(np.array(best) * scale).astype(np.int32)], 1)
+                    it["pin"] = inside_point(m, scale)
+                    xs = [b["bbox"][0], b["bbox"][2]] + [t[0][0] for t in targets]
+                    ys = [b["bbox"][1], b["bbox"][3]] + [t[0][1] for t in targets]
+                    it["labelBoxes"] = [xywh((min(xs), min(ys), max(xs), max(ys)))]
+                    if len(polys) == 1:
+                        it["shape"] = {"type": "polygon", "points": polys[0]}
+                    else:
+                        it["shapes"] = [{"type": "polygon", "points": q} for q in polys]
+                    issue(fname, f"{name}: label is outside the building; followed its lines to {len(polys)} room(s). Check on the review picture.")
+                else:
+                    no_shape.append(f"{name} ({why}; no lines to follow)")
             else:
                 no_shape.append(f"{name} ({why})")
             items.append(it)
@@ -720,12 +843,9 @@ def main():
                 best.setdefault("labelBoxes", []).append(xywh(b["bbox"]))
 
         # 6. layers: muted plan, full-colour plan, transparent Canva layer
-        C = render(page, bscale)
-        B = plan_only_render(doc, page, bscale, cover_boxes)
-        B[:int(CFG["titleMaxY"] * bscale)] = 255  # the plan picture's own logo sits under the Canva title
         Image.fromarray(mute(B)).save(MAPS_DIR / f"{fid}.webp", "WEBP", quality=74, method=6)
         Image.fromarray(B).save(MAPS_DIR / f"{fid}-full.webp", "WEBP", quality=74, method=6)
-        Image.fromarray(uncomposite(C, B), "RGBA").save(
+        Image.fromarray(layer, "RGBA").save(
             MAPS_DIR / f"{fid}-labels.webp", "WEBP", quality=80, method=6)
         floor_rec["chromeBoxes"] = chrome
 
@@ -896,8 +1016,13 @@ def draw_review(doc, gen, final):
             h = cats[it["category"]]["color"].lstrip("#")
             rgb = tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
             off = it["id"] not in final_ids
-            if "shape" in it:
-                pts = [(x * s, y * s) for x, y in it["shape"]["points"]]
+            for sh in ([it["shape"]] if "shape" in it else []) + it.get("shapes", []):
+                if sh["type"] == "rect":
+                    pts = [(sh["x"], sh["y"]), (sh["x"] + sh["width"], sh["y"]),
+                           (sh["x"] + sh["width"], sh["y"] + sh["height"]), (sh["x"], sh["y"] + sh["height"])]
+                else:
+                    pts = sh["points"]
+                pts = [(x * s, y * s) for x, y in pts]
                 dr.polygon(pts, fill=rgb + (50,), outline=(120, 120, 120, 255) if off else (220, 0, 60, 255), width=3)
             px, py = it["pin"][0] * s, it["pin"][1] * s
             dr.ellipse((px - 6, py - 6, px + 6, py + 6), fill=(220, 0, 60, 255), outline=(255, 255, 255, 255), width=2)

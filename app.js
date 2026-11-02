@@ -49,8 +49,11 @@
     .toLowerCase().replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, ' ').trim();
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  function shapePoints(it) {
-    const s = it.shape;
+  // all areas of an item: `shape` plus optional `shapes` (one item, several rooms)
+  function itemPolys(it) {
+    return [it.shape, ...(Array.isArray(it.shapes) ? it.shapes : [])].map(shapePoints).filter(Boolean);
+  }
+  function shapePoints(s) {
     if (!s) return null;
     if (s.type === 'polygon' && Array.isArray(s.points) && s.points.length >= 3) return s.points;
     if (s.type === 'rect') return [[s.x, s.y], [s.x + s.width, s.y], [s.x + s.width, s.y + s.height], [s.x, s.y + s.height]];
@@ -63,6 +66,12 @@
       if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
     }
     return inside;
+  }
+  function isDark(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return false;
+    const n = parseInt(m[1], 16);
+    return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255 < 0.45;
   }
   function polyArea(pts) {
     let a = 0;
@@ -98,8 +107,9 @@
     S.items = (data.items || []).filter((it) => it && it.id && S.floorById[it.floor] && S.catById[it.category] && Array.isArray(it.pin));
     S.items.forEach((it) => {
       S.itemById[it.id] = it;
-      it._pts = shapePoints(it);
-      it._area = it._pts ? polyArea(it._pts) : 0;
+      it._polys = itemPolys(it);
+      it._pts = it._polys.length ? it._polys.flat() : null; // all corner points (bounds, "has a shape")
+      it._area = it._polys.reduce((a, p) => a + polyArea(p), 0);
       const cat = S.catById[it.category];
       it._name = norm(it.name);
       it._hay = norm([it.name, ...(it.aliases || []), it.description, cat.label].join(' '));
@@ -325,12 +335,15 @@
     if (layered && hl.some((i) => i._pts)) ensureFull(f);
     for (const it of hl) {
       const c = S.catById[it.category].color || '#e33';
-      if (it._pts) {
-        const d = it._pts.map((p) => p.join(',')).join(' ');
-        el('polygon', { points: d, fill: '#000' }, maskG);
-        el('polygon', { points: d }, clipG);
-        el('polygon', { points: d, class: 'hl-halo' }, hlLayer);
-        el('polygon', { points: d, class: 'hl' + (layered ? ' over-full' : ''), fill: c, stroke: c }, hlLayer);
+      if (it._polys.length) {
+        for (const poly of it._polys) {
+          const d = poly.map((p) => p.join(',')).join(' ');
+          el('polygon', { points: d, fill: '#000' }, maskG);
+          el('polygon', { points: d }, clipG);
+          el('polygon', { points: d, class: 'hl-halo' }, hlLayer);
+          // dark category colours (e.g. rooms) would darken the area: brighten it instead
+          el('polygon', { points: d, class: 'hl' + (layered ? ' over-full' : '') + (isDark(c) ? ' lighten' : ''), fill: c, stroke: c }, hlLayer);
+        }
       } else if (!f.labels) {
         // no separate label layer: reveal the printed pin through the veil
         el('circle', { cx: it.pin[0], cy: it.pin[1], r: 40 / S.view.k, fill: '#000' }, maskG);
@@ -563,7 +576,7 @@
       if (d < bd && (!S.cat || it.category === S.cat)) { bd = d; best = it; }
     }
     if (!best) {
-      const inside = here.filter((i) => i._pts && inPoly(wx, wy, i._pts) && (!S.cat || i.category === S.cat))
+      const inside = here.filter((i) => i._polys.some((poly) => inPoly(wx, wy, poly)) && (!S.cat || i.category === S.cat))
         .sort((a, b) => a._area - b._area);
       best = inside[0] || null;
     }
@@ -577,7 +590,11 @@
   // ---------------------------------------------------------------- search
   function bindSearch() {
     const panel = $('search'), btn = $('searchBtn'), input = $('q');
-    const open = () => { panel.hidden = false; btn.setAttribute('aria-expanded', 'true'); input.focus(); runSearch(); };
+    const open = () => {
+      panel.hidden = false; btn.setAttribute('aria-expanded', 'true');
+      runSearch();
+      if (!matchMedia('(pointer: coarse)').matches) input.focus(); // on phones the keyboard would cover the room list
+    };
     const close = () => { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
     btn.addEventListener('click', () => (panel.hidden ? open() : close()));
     $('searchClose').addEventListener('click', close);
@@ -614,17 +631,35 @@
       .map((r) => r.it);
   }
 
+  // one result row; the left bar shows the floor's colour (floor.color)
+  function resultRow(it, showFloor) {
+    const c = S.catById[it.category], f = S.floorById[it.floor];
+    const sub = [it.description, showFloor ? f.name : ''].filter(Boolean).join(' · ');
+    return `<li style="--floor:${esc(f.color || 'transparent')}"><button data-item="${esc(it.id)}">${catDot(c)}<span><span class="name">${esc(it.name)}</span>` +
+      (sub ? `<br><span class="sub">${esc(sub)}</span>` : '') + `</span></button></li>`;
+  }
+
+  // empty search = every named room, grouped by floor, opened at the current floor
+  const ROOM_CAT = 'rooms';
+  function renderRoomList(ul) {
+    const rooms = S.items.filter((i) => i.category === ROOM_CAT);
+    if (!rooms.length) { ul.innerHTML = `<li class="hint">Type a room name or a meeting point like “C3”.</li>`; return; }
+    ul.innerHTML = S.floors.map((f) => {
+      const here = rooms.filter((i) => i.floor === f.id).sort((a, b) => a.name.localeCompare(b.name));
+      if (!here.length) return '';
+      return `<li class="floor-head" data-floor-head="${esc(f.id)}" style="--floor:${esc(f.color || 'transparent')}">${esc(f.name)}</li>` +
+        here.map((it) => resultRow(it, false)).join('');
+    }).join('');
+    const head = ul.querySelector(`[data-floor-head="${CSS.escape(S.floor)}"]`);
+    ul.scrollTop = head ? head.offsetTop - ul.offsetTop : 0;
+  }
+
   function runSearch() {
     const q = $('q').value, ul = $('results');
     const all = search(q);
     const list = S.allFloors ? all : all.filter((i) => i.floor === S.floor);
-    if (!norm(q)) { ul.innerHTML = `<li class="hint">Type a room name or a meeting point like “C3”.</li>`; return; }
-    let html = list.slice(0, 40).map((it) => {
-      const c = S.catById[it.category];
-      const sub = [it.description, S.allFloors ? S.floorById[it.floor].name : ''].filter(Boolean).join(' · ');
-      return `<li><button data-item="${esc(it.id)}">${catDot(c)}<span><span class="name">${esc(it.name)}</span>` +
-        (sub ? `<br><span class="sub">${esc(sub)}</span>` : '') + `</span></button></li>`;
-    }).join('');
+    if (!norm(q)) { renderRoomList(ul); return; }
+    let html = list.slice(0, 40).map((it) => resultRow(it, S.allFloors)).join('');
     const elsewhere = all.length - list.length;
     if (!S.allFloors && elsewhere > 0) {
       html += `<li class="hint">${list.length ? '' : 'Nothing on this floor. '}${elsewhere} more on other floors – <button data-all="1">search all floors</button></li>`;

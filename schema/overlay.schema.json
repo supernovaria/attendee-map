@@ -87,6 +87,11 @@
           "view": {
             "$ref": "#/$defs/box",
             "description": "Optional start view."
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$",
+            "description": "Optional. Floor colour: bar next to that floor's rooms in the room list and search results."
           }
         }
       }
@@ -164,56 +169,7 @@
             "$ref": "#/$defs/point"
           },
           "shape": {
-            "oneOf": [
-              {
-                "type": "object",
-                "required": [
-                  "type",
-                  "points"
-                ],
-                "properties": {
-                  "type": {
-                    "const": "polygon"
-                  },
-                  "points": {
-                    "type": "array",
-                    "minItems": 3,
-                    "items": {
-                      "$ref": "#/$defs/point"
-                    }
-                  }
-                }
-              },
-              {
-                "type": "object",
-                "required": [
-                  "type",
-                  "x",
-                  "y",
-                  "width",
-                  "height"
-                ],
-                "properties": {
-                  "type": {
-                    "const": "rect"
-                  },
-                  "x": {
-                    "type": "number"
-                  },
-                  "y": {
-                    "type": "number"
-                  },
-                  "width": {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  },
-                  "height": {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  }
-                }
-              }
-            ]
+            "$ref": "#/$defs/shape"
           },
           "labelBoxes": {
             "type": "array",
@@ -221,6 +177,13 @@
               "$ref": "#/$defs/box"
             },
             "description": "Optional. Where this item's printed label/pin sits in the floor's labels image: [x, y, width, height]."
+          },
+          "shapes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/shape"
+            },
+            "description": "Optional, instead of or in addition to shape: several areas for one item (e.g. 'Nap Rooms' = four rooms)."
           }
         }
       }
@@ -263,6 +226,58 @@
       ],
       "minItems": 4,
       "maxItems": 4
+    },
+    "shape": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "points"
+          ],
+          "properties": {
+            "type": {
+              "const": "polygon"
+            },
+            "points": {
+              "type": "array",
+              "minItems": 3,
+              "items": {
+                "$ref": "#/$defs/point"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "properties": {
+            "type": {
+              "const": "rect"
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "height": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        }
+      ]
     }
   }
 }

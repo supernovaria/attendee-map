@@ -69,11 +69,11 @@ def main() -> int:
             errors.append(f"item '{iid}': category '{it['category']}' does not exist")
         f = floors[it["floor"]]
         pts = [it["pin"]]
-        sh = it.get("shape")
-        if sh and sh["type"] == "polygon":
-            pts += sh["points"]
-        elif sh and sh["type"] == "rect":
-            pts += [[sh["x"], sh["y"]], [sh["x"] + sh["width"], sh["y"] + sh["height"]]]
+        for sh in ([it["shape"]] if it.get("shape") else []) + it.get("shapes", []):
+            if sh["type"] == "polygon":
+                pts += sh["points"]
+            elif sh["type"] == "rect":
+                pts += [[sh["x"], sh["y"]], [sh["x"] + sh["width"], sh["y"] + sh["height"]]]
         for x, y in pts:
             if not (0 <= x <= f["width"] and 0 <= y <= f["height"]):
                 errors.append(f"item '{iid}': point ({x}, {y}) is outside floor '{f['id']}' ({f['width']} x {f['height']})")

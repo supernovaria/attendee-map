@@ -12,6 +12,7 @@ Static files only: no server, no database, no login. Brief: [`venue-map-brief.md
 
 - **Floors**: tabs at the top. A dot on a tab means the selected category also exists on that floor.
 - **Categories**: chips at the bottom. Tap = highlight, tap again = clear. Org fair and Project fair jump to their floor automatically.
+- **Room list**: open search without typing: all rooms, grouped by floor (coloured bar per floor), opened at the floor you're on.
 - **Search**: magnifier, top right. Finds names, codes (`C3`, `MP C3`), descriptions (`speaker` → Darwin). Accents and case don't matter. "All floors" searches the whole building.
 - **Tap anything on the map** to see what it is.
 - **Colours** on the plan are muted; whatever you select is shown in full colour with an outline.
@@ -80,7 +81,7 @@ Never edit `data/overlay.json` by hand; the next import overwrites it. Correctio
 | Org fair areas | Outlined boxes drawn in Canva | High |
 | Charging station | End of the arrow from its label | Check on site |
 | Toilets, stairs, lifts, stages | **Colour in the floor-plan picture**, using the legend colours (+ the cream spiral staircases) | Good, but check: the plan is one picture in the PDF, not shapes |
-| Room outlines | Flood-fill of the white floor around each label | Partial: open-plan areas and labels outside rooms get a pin only |
+| Room outlines | Flood-fill of the white floor around each label. Labels outside the building (e.g. *Nap Rooms*) follow their thin lines to the room(s) they point at | Partial: open-plan areas get a pin only |
 
 Areas painted over by a box in Canva (e.g. a lift hidden with a grey box) are left out and reported.
 
@@ -106,7 +107,7 @@ For any other tool that wants to produce this map (the layout planner, a future 
 5. Floors, categories, labels, colours, icons and order all come from the data. Nothing venue-specific is in the code. A category whose items are all on one floor (or that sets `"floor"`) switches to that floor when selected.
 6. Ids are opaque, stable strings (they end up in printed QR codes).
 7. Shapes: `polygon` or `rect` only. Every item has a `pin` (the producer computes one if needed).
-8. Optional extras the viewer understands: `floor.shortName` (tab label), `floor.view` (`[x, y, w, h]` start view), `category.chip: false` (searchable, no chip), `item.description`.
+8. Optional extras the viewer understands: `floor.shortName` (tab label), `floor.color` (bar in the room list), `item.shapes` (several areas for one item, e.g. four nap rooms), `floor.view` (`[x, y, w, h]` start view), `category.chip: false` (searchable, no chip), `item.description`.
    Layers (all optional; without them the page dims the whole background instead):
    - `floor.backgroundHighlight`: full-colour image, shown only inside highlighted shapes (so `background` can be muted);
    - `floor.labels`: transparent image of printed labels drawn on top;

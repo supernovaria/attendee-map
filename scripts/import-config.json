@@ -9,28 +9,32 @@
       "id": "0",
       "name": "Ground floor",
       "shortName": "Ground",
-      "order": 0
+      "order": 0,
+      "color": "#D7263D"
     },
     {
       "page": 1,
       "id": "1",
       "name": "1st floor",
       "shortName": "1st",
-      "order": 1
+      "order": 1,
+      "color": "#8A8F98"
     },
     {
       "page": 2,
       "id": "2",
       "name": "2nd floor",
       "shortName": "2nd",
-      "order": 2
+      "order": 2,
+      "color": "#2E9E4F"
     },
     {
       "page": 3,
       "id": "3",
       "name": "3rd floor",
       "shortName": "3rd",
-      "order": 3
+      "order": 3,
+      "color": "#111111"
     }
   ],
   "_categoriesComment": "enabled:false = extracted for review but left out of data/overlay.json until Emily confirms (brief section 6).",
