@@ -1,6 +1,6 @@
 # Import report
 
-Generated 2026-11-02T23:03:27+01:00 from `source/attendee-map.pdf` by `scripts/import.py`. Review pictures (every item drawn on the plan, red outline = shape, dot = pin, label = item id): [Ground floor](review/0.jpg), [1st floor](review/1.jpg), [2nd floor](review/2.jpg), [3rd floor](review/3.jpg).
+Generated 2026-11-02T23:13:20+01:00 from `source/attendee-map.pdf` by `scripts/import.py`. Review pictures (every item drawn on the plan, red outline = shape, dot = pin, label = item id): [Ground floor](review/0.jpg), [1st floor](review/1.jpg), [2nd floor](review/2.jpg), [3rd floor](review/3.jpg).
 
 ## What the PDF contains
 
@@ -11,14 +11,14 @@ Generated 2026-11-02T23:03:27+01:00 from `source/attendee-map.pdf` by `scripts/i
 
 ## Counts per floor
 
-| Floor | Food & snacks | Lift | Org fair areas | Project fair | Stage | Stairs | Toilets | meeting points | rooms | rooms with outline |
-|---|---|---|---|---|---|---|---|---|---|---|
-| Ground floor | 1 | 2 | 3 | 0 | 0 | 3 | 1 | 4 | 8 | 1 |
-| 1st floor | 1 | 2 | 0 | 1 | 3 | 4 | 2 | 6 | 6 | 4 |
-| 2nd floor | 0 | 1 | 0 | 0 | 1 | 2 | 2 | 3 | 5 | 3 |
-| 3rd floor | 1 | 1 | 0 | 0 | 1 | 2 | 2 | 4 | 5 | 3 |
+| Floor | Food & snacks | Lift | Org fair areas | Project fair | Spiral stairs | Stage | Stairs | Toilets | meeting points | rooms | rooms with outline |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Ground floor | 1 | 2 | 3 | 0 | 0 | 0 | 3 | 1 | 4 | 8 | 1 |
+| 1st floor | 1 | 2 | 0 | 1 | 0 | 3 | 4 | 2 | 6 | 6 | 4 |
+| 2nd floor | 0 | 1 | 0 | 0 | 1 | 1 | 2 | 2 | 3 | 5 | 3 |
+| 3rd floor | 1 | 1 | 0 | 0 | 1 | 1 | 2 | 2 | 4 | 5 | 3 |
 
-Generated items: 78. Published in `data/overlay.json`: 67.
+Generated items: 80. Published in `data/overlay.json`: 75.
 
 ## Things to check (numbered so you can answer by number)
 
@@ -38,7 +38,7 @@ Generated items: 78. Published in `data/overlay.json`: 67.
 14. **3rd floor**: Lift at (640, 534) is painted over by a box in Canva - left out. Is it closed/not for attendees?
 15. **3rd floor**: Rooms without an outline (pin only, at the label): Third Floor Foyer (open area, no closed outline (127514 pt²)); Voltaire (open area, no closed outline (127514 pt²))
 16. **all**: Near-duplicate shade: #84CC3D (drawn in Canva) is close to the Elevators colour but not the same. If it means the same thing, use the exact colour; if not, consider a more distinct one.
-17. **overrides**: Not published (category switched off): lifts, stages
+17. **overrides**: Not published (category switched off): stages
 
 ## How to fix things
 

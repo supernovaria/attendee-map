@@ -738,9 +738,10 @@ def merge(gen):
         if f is None:
             notes.append(f"Override for unknown floor '{fid}' ignored.")
         else:
-            f.update(patch)
+            f.update({k: v for k, v in patch.items() if not k.startswith("_")})
     cat_ovr = ovr.get("categories") or {}
     for cid, patch in cat_ovr.items():
+        patch = {k: v for k, v in patch.items() if not k.startswith("_")}
         c = next((c for c in out["categories"] if c["id"] == cid), None)
         if c is None:
             out["categories"].append({"id": cid, **patch})

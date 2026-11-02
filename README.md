@@ -4,7 +4,7 @@ A phone-friendly page attendees open from a QR code. It shows the floor plans; t
 
 Static files only: no server, no database, no login. Brief: [`venue-map-brief.md`](venue-map-brief.md).
 
-**Status (2 Nov 2026):** first working version. Not deployed yet (hosting is an open question). See *Open questions* and `import/import-report.md`.
+**Status (2 Nov 2026):** first working version, reviewed once. Decisions so far are recorded in `import/overlay.overrides.json` (`_decisions`). Hosting: GitHub Pages (repo public for now).
 
 ---
 
@@ -77,7 +77,7 @@ Never edit `data/overlay.json` by hand; the next import overwrites it. Correctio
 | Catering, Project fair | Dark-blue pins + nearest label | High |
 | Org fair areas | Outlined boxes drawn in Canva | High |
 | Charging station | End of the arrow from its label | Check on site |
-| Toilets, stairs, lifts, stages | **Colour in the floor-plan picture**, using the legend colours | Good, but check: the plan is one picture in the PDF, not shapes |
+| Toilets, stairs, lifts, stages | **Colour in the floor-plan picture**, using the legend colours (+ the cream spiral staircases) | Good, but check: the plan is one picture in the PDF, not shapes |
 | Room outlines | Flood-fill of the white floor around each label | Partial: open-plan areas and labels outside rooms get a pin only |
 
 Areas painted over by a box in Canva (e.g. a lift hidden with a grey box) are left out and reported.
@@ -108,11 +108,16 @@ Icon names available: `toilet food pin stairs bolt booth flask door lift stage i
 
 ## Hosting
 
-Any static host works; the site is the repository root (`index.html`). Planned: GitHub Pages or Netlify, decision pending. The URL must never change once it's on printed QR codes.
+Any static host works; the site is the repository root (`index.html`, plus an empty `.nojekyll`).
+
+Current plan: **GitHub Pages**, repo public. Settings → Pages → *Deploy from a branch* → `main`, folder `/ (root)`. URL: `https://supernovaria.github.io/attendee-map/`.
+
+If the repo goes private later, Cloudflare Pages can deploy from a private repo (the site itself stays public). **Moving host changes the URL and breaks printed QR codes**, so either settle the host before printing, or put the QR codes on a domain you control (e.g. a subdomain pointed at whichever host) so the host can change underneath.
 
 ## Known gaps
 
 - Room outlines exist for about half the rooms; the rest highlight as a pin. Fine for search; add a `rect`/`polygon` via overrides where it matters.
 - No offline mode (deliberately: a stale cached map is worse than a slow one).
-- No German UI yet.
+- English UI only (decided).
+- Stages are extracted but switched off (`categories` in the overrides to turn on).
 - Toilets inside the Nap Rooms wing (ground floor) are not coloured on the plan, so they're not in the Toilets category.

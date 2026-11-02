@@ -152,6 +152,17 @@
       ],
       "tolerance": 30,
       "name": "Stage"
+    },
+    {
+      "category": "stairs",
+      "legend": "(not in legend) cream spiral staircase",
+      "rgb": [
+        255,
+        252,
+        221
+      ],
+      "tolerance": 10,
+      "name": "Spiral stairs"
     }
   ],
   "_unkeyedColoursComment": "Colours seen in the plan that are deliberately not categories (reported, not imported).",
