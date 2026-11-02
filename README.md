@@ -14,6 +14,8 @@ Static files only: no server, no database, no login. Brief: [`venue-map-brief.md
 - **Categories**: chips at the bottom. Tap = highlight, tap again = clear. Org fair and Project fair jump to their floor automatically.
 - **Search**: magnifier, top right. Finds names, codes (`C3`, `MP C3`), descriptions (`speaker` → Darwin). Accents and case don't matter. "All floors" searches the whole building.
 - **Tap anything on the map** to see what it is.
+- **Colours** on the plan are muted; whatever you select is shown in full colour with an outline.
+- **Labels**: with something selected, only its labels stay crisp and the rest fade. The **Aa** button (top right of the map) shows every label exactly as printed in the PDF; the choice is remembered on that phone.
 - **Zoom**: pinch, double-tap, mouse wheel; the corner button resets.
 - **Links for printed QR codes** (open a pre-filtered view):
   - `…/?floor=1&cat=toilets` (floor 1, toilets highlighted)
@@ -84,7 +86,10 @@ Areas painted over by a box in Canva (e.g. a lift hidden with a grey box) are le
 
 Files it writes:
 
-- `maps/<floor>.webp`: backgrounds the page loads (one per floor, ~70–150 KB).
+- `maps/<floor>.webp`: the plan picture with colours muted (walls untouched). Loaded first.
+- `maps/<floor>-labels.webp`: everything you drew in Canva (text, pins, arrows, boxes), on a transparent background, separated from the plan picture. Loaded first.
+- `maps/<floor>-full.webp`: the plan picture in full colour; only fetched when something on that floor is highlighted, and only shown inside the highlighted shapes.
+- Canva boxes that hide closed areas are kept fully visible in the label layer, so fading labels never reveals what they cover.
 - `source/raster/<floor>.png` + `source/raster/rasters.json`: high-res copies with pixel sizes, kept for the layout planner (not loaded by the page).
 - `import/overlay.generated.json`: raw import result.
 - `data/overlay.json`: generated + overrides. **This is what the page reads.**
@@ -102,6 +107,12 @@ For any other tool that wants to produce this map (the layout planner, a future 
 6. Ids are opaque, stable strings (they end up in printed QR codes).
 7. Shapes: `polygon` or `rect` only. Every item has a `pin` (the producer computes one if needed).
 8. Optional extras the viewer understands: `floor.shortName` (tab label), `floor.view` (`[x, y, w, h]` start view), `category.chip: false` (searchable, no chip), `item.description`.
+   Layers (all optional; without them the page dims the whole background instead):
+   - `floor.backgroundHighlight`: full-colour image, shown only inside highlighted shapes (so `background` can be muted);
+   - `floor.labels`: transparent image of printed labels drawn on top;
+   - `item.labelBoxes`: `[x, y, w, h]` boxes where an item's printed label/pin sits in that image (kept crisp when the item is highlighted, faded otherwise);
+   - `floor.chromeBoxes`: title/legend areas, faded unless *All labels* is on;
+   - `floor.fixedBoxes`: areas of the label image that are always fully shown.
 9. **Any tool may regenerate `data/overlay.json` and `maps/` as long as `python3 scripts/validate.py` passes.**
 
 Icon names available: `toilet food pin stairs bolt booth flask door lift stage info coat firstaid quiet registration` (anything else shows a dot).

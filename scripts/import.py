@@ -243,10 +243,55 @@ def canva_covers(page, covers):
             continue
         if max(f) < 0.05:  # pure black fills here are clipping artefacts
             continue
+        if max(f) - min(f) > 0.05:  # coloured = pins, legend swatches, icons
+            continue
         r = d["rect"]
-        if r.width * r.height >= 40:
+        if r.width * r.height >= 100:
             out.append(pymupdf.Rect(r))
     return out
+
+
+def plan_only_render(doc, page, s):
+    """The plan picture alone, rendered by MuPDF exactly as on the page."""
+    info = max(page.get_image_info(xrefs=True), key=lambda i: i["width"] * i["height"])
+    tmp = pymupdf.open()
+    tp = tmp.new_page(width=page.rect.width, height=page.rect.height)
+    tp.insert_image(pymupdf.Rect(info["bbox"]), stream=doc.extract_image(info["xref"])["image"], keep_proportion=False)
+    return render(tp, s)
+
+
+def mute(rgb):
+    """Desaturate and lighten coloured pixels; greys (walls, outlines) untouched."""
+    a = rgb.astype(np.float32) / 255
+    grey = (a * np.array([0.299, 0.587, 0.114], np.float32)).sum(2, keepdims=True)
+    sat = a.max(2, keepdims=True) - a.min(2, keepdims=True)
+    k = np.clip(sat / 0.2, 0, 1)
+    muted = (grey + (1 - grey) * 0.55) + (a - grey) * 0.22
+    out = a * (1 - k) + muted * k
+    return (out.clip(0, 1) * 255).astype(np.uint8)
+
+
+def uncomposite(C, B, fixed, s):
+    """Split the page render C into plan B + a transparent layer F (RGBA) so
+    that F over B == C. Areas in `fixed` (Canva boxes hiding closed areas)
+    are kept fully opaque so they keep hiding whatever is underneath."""
+    Cf, Bf = C.astype(np.float32) / 255, B.astype(np.float32) / 255
+    eps = 1e-6
+    up = np.where(Cf > Bf, (Cf - Bf) / np.maximum(1 - Bf, eps), 0)
+    dn = np.where(Cf < Bf, (Bf - Cf) / np.maximum(Bf, eps), 0)
+    a = np.clip(np.maximum(up, dn).max(2), 0, 1)
+    a[np.abs(C.astype(int) - B.astype(int)).max(2) < 4] = 0
+    F = np.where(a[..., None] > 0, Bf + (Cf - Bf) / np.maximum(a[..., None], eps), 0).clip(0, 1)
+    for r in fixed:
+        x0, y0, x1, y1 = [int(round(v * s)) for v in (r.x0, r.y0, r.x1, r.y1)]
+        a[max(0, y0):y1, max(0, x0):x1] = 1
+        F[max(0, y0):y1, max(0, x0):x1] = Cf[max(0, y0):y1, max(0, x0):x1]
+    return (np.dstack([F, a]) * 255).round().astype(np.uint8)
+
+
+def xywh(r, pad=2.0):
+    x0, y0, x1, y1 = r
+    return [r1(x0 - pad), r1(y0 - pad), r1(x1 - x0 + 2 * pad), r1(y1 - y0 + 2 * pad)]
 
 
 def path_points(d):
@@ -448,8 +493,6 @@ def main():
 
         # 1. backgrounds
         bscale = CFG["backgroundWidthPx"] / W
-        bg = render(page, bscale)
-        Image.fromarray(bg).save(MAPS_DIR / f"{fid}.webp", "WEBP", quality=72, method=6)
         img = render(page, scale)
         plan = plan_canvas(doc, page, scale)
         Image.fromarray(img).save(RASTER_DIR / f"{fid}.png", optimize=True)
@@ -460,8 +503,13 @@ def main():
         }
         floors.append({
             "id": fid, "name": fname, "shortName": fl.get("shortName", fname), "order": fl["order"],
-            "background": f"maps/{fid}.webp", "width": r1(W), "height": r1(H),
+            "background": f"maps/{fid}.webp",
+            "backgroundHighlight": f"maps/{fid}-full.webp",
+            "labels": f"maps/{fid}-labels.webp",
+            "width": r1(W), "height": r1(H),
         })
+        floor_rec = floors[-1]
+        first_item = len(items)
 
         # 2. vector data
         covers = covering_images(page)
@@ -470,9 +518,13 @@ def main():
             hb = group_blocks(hidden)
             issue(fname, "Hidden text under the floor-plan picture was ignored (old labels left in Canva behind the image?): "
                   + "; ".join(f'"{b["text"]}"' for b in hb))
-        blocks = [b for b in group_blocks(lines)
+        all_blocks = group_blocks(lines)
+        chrome = [xywh(b["bbox"], 4) for b in all_blocks if b["cy"] <= CFG["titleMaxY"]]
+        chrome.append(xywh(legend, 0))
+        blocks = [b for b in all_blocks
                   if not in_box(b["cx"], b["cy"], legend) and b["cy"] > CFG["titleMaxY"]]
-        blocks = [b for b in blocks if not any(p.search(b["text"]) for p in ignore_rules)]
+        notes = [b for b in blocks if any(p.search(b["text"]) for p in ignore_rules)]
+        blocks = [b for b in blocks if b not in notes]
 
         point_blocks = [b for b in blocks if re.match(r"^point\b", b["text"], re.I)]
         cat_blocks, room_blocks = [], []
@@ -500,6 +552,7 @@ def main():
                 "name": f"Meeting point {code}" + (f" · {place}" if place else ""),
                 "aliases": [f"Point {code}", code, f"MP {code}", f"MP{code}"] + ([place] if place else []),
                 "pin": [r1(mpins[pi]["tip"][0]), r1(mpins[pi]["tip"][1])],
+                "labelBoxes": [xywh(b["bbox"]), xywh(mpins[pi]["rect"])],
             })
             if d > 60:
                 issue(fname, f"Meeting point {code}: label is {d:.0f} pt from its pin (joined by an arrow?). Paired anyway - check.")
@@ -527,6 +580,7 @@ def main():
                 "name": cats[c]["label"] if c != "food" else ("Catering" + (f" · {near}" if near else "")),
                 "aliases": ["Catering", "Food", "Snacks", "Coffee"] if c == "food" else [b["text"]],
                 "pin": [r1(npins[pi]["tip"][0]), r1(npins[pi]["tip"][1])],
+                "labelBoxes": [xywh(b["bbox"]), xywh(npins[pi]["rect"])],
             })
             st[cats[c]["label"]] = st.get(cats[c]["label"], 0) + 1
         for pi in up:
@@ -550,6 +604,7 @@ def main():
                 "aliases": [b["text"]],
                 "shape": {"type": "polygon", "points": pts},
                 "pin": [r1(ax), r1(ay)],
+                "labelBoxes": [xywh(area["rect"], 4), xywh(b["bbox"])],
             })
             if len(fair_blocks) > 1:
                 issue(fname, f"Outlined box at {[round(v) for v in area['rect']]} assigned to \"{b['text']}\" (nearest of several fair labels).")
@@ -569,6 +624,8 @@ def main():
                 "name": "Charging station" if c == "charging" else b["text"],
                 "aliases": [b["text"]],
                 "pin": pin,
+                "labelBoxes": [xywh((min(b["bbox"][0], pin[0]), min(b["bbox"][1], pin[1]),
+                                     max(b["bbox"][2], pin[0]), max(b["bbox"][3], pin[1])), 12)],
             })
             how = "arrow tip" if pin != [r1(b["cx"]), r1(b["cy"])] else "the label (no pin found)"
             issue(fname, f'"{b["text"]}": placed at {how}. Check the position on site.')
@@ -617,6 +674,7 @@ def main():
                 "id": new_id(f"room-{slug(name)}"), "floor": fid, "category": "rooms",
                 "name": name, "aliases": [],
                 "pin": [r1(b["cx"]), r1(b["cy"])],
+                "labelBoxes": [xywh(b["bbox"])],
             }
             if desc:
                 it["description"] = desc
@@ -637,6 +695,30 @@ def main():
         st["rooms with outline"] = len(room_blocks) - len(no_shape)
         if no_shape:
             issue(fname, "Rooms without an outline (pin only, at the label): " + "; ".join(no_shape))
+
+        # 5. "To floor …" / lift floor numbers belong to the nearest stairs or lift
+        movers = [it for it in items[first_item:] if it["category"] in ("stairs", "lifts") and "shape" in it]
+        for b in notes:
+            best, bd = None, 45
+            for it in movers:
+                xs = [p[0] for p in it["shape"]["points"]]
+                ys = [p[1] for p in it["shape"]["points"]]
+                dd = rect_dist(b["cx"], b["cy"], (min(xs), min(ys), max(xs), max(ys)))
+                if dd < bd:
+                    best, bd = it, dd
+            if best:
+                best.setdefault("labelBoxes", []).append(xywh(b["bbox"]))
+
+        # 6. layers: muted plan, full-colour plan, transparent Canva layer
+        C = render(page, bscale)
+        B = plan_only_render(doc, page, bscale)
+        B[:int(CFG["titleMaxY"] * bscale)] = 255  # the plan picture's own logo sits under the Canva title
+        Image.fromarray(mute(B)).save(MAPS_DIR / f"{fid}.webp", "WEBP", quality=74, method=6)
+        Image.fromarray(B).save(MAPS_DIR / f"{fid}-full.webp", "WEBP", quality=74, method=6)
+        Image.fromarray(uncomposite(C, B, cover_rects, bscale), "RGBA").save(
+            MAPS_DIR / f"{fid}-labels.webp", "WEBP", quality=80, method=6)
+        floor_rec["chromeBoxes"] = chrome
+        floor_rec["fixedBoxes"] = [xywh(tuple(r), 0) for r in cover_rects]
 
     # near-duplicate shades among vector fills vs key colours
     shade_check(doc, CFG)

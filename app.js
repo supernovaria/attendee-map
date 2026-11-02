@@ -75,9 +75,11 @@
     data: null, floors: [], floorById: {}, cats: [], catById: {}, items: [], itemById: {},
     floor: null, cat: null, item: null, allFloors: false,
     view: { k: 1, x: 0, y: 0 }, fitK: 1, pulseAt: 0, ready: false,
+    allLabels: false,
   };
+  try { S.allLabels = localStorage.getItem('venueMap.allLabels') === '1'; } catch (e) { /* private mode */ }
   const svg = $('svg'), mapEl = $('map');
-  let vp, bgLayer, dimRect, maskG, hlLayer, markerLayer;
+  let vp, bgLayer, fullLayer, dimRect, maskG, hlLayer, labelLayer, clipG, labMaskG, markerLayer;
   const bgs = {};
 
   // ---------------------------------------------------------------- load
@@ -131,20 +133,41 @@
   }
 
   // ---------------------------------------------------------------- svg setup
+  // Layers, bottom to top: background (muted when a full-colour copy exists),
+  // full-colour copy clipped to the selection, light veil, outlines, printed
+  // labels (masked per label), then screen-space markers.
   function buildSvg() {
     const defs = el('defs', {}, svg);
     const mask = el('mask', { id: 'hole', maskUnits: 'userSpaceOnUse' }, defs);
     maskG = el('g', {}, mask);
+    clipG = el('clipPath', { id: 'sel', clipPathUnits: 'userSpaceOnUse' }, defs);
+    const lm = el('mask', { id: 'lab', maskUnits: 'userSpaceOnUse' }, defs);
+    labMaskG = el('g', {}, lm);
     vp = el('g', {}, svg);
     bgLayer = el('g', {}, vp);
+    fullLayer = el('g', { 'clip-path': 'url(#sel)' }, vp);
     dimRect = el('rect', { class: 'dim', mask: 'url(#hole)' }, vp);
     hlLayer = el('g', {}, vp);
+    labelLayer = el('g', { mask: 'url(#lab)' }, vp);
     markerLayer = el('g', {}, svg); // screen space: markers keep their size when zooming
   }
 
+  const fulls = {}, labs = {};
+  const layerImg = (f, href, parent) => el('image', { x: 0, y: 0, width: f.width, height: f.height, preserveAspectRatio: 'none', href }, parent);
+  function showOnly(store, id) { for (const [fid, im] of Object.entries(store)) im.style.display = fid === id ? '' : 'none'; }
+  function ensureLayers(f) {
+    if (f.labels && !labs[f.id]) labs[f.id] = layerImg(f, f.labels, labelLayer);
+    showOnly(labs, f.id);
+    showOnly(fulls, f.id);
+  }
+  // the full-colour copy is only fetched once something on that floor is highlighted
+  function ensureFull(f) {
+    if (f.backgroundHighlight && !fulls[f.id]) fulls[f.id] = layerImg(f, f.backgroundHighlight, fullLayer);
+    showOnly(fulls, f.id);
+  }
   function ensureBg(f) {
     if (bgs[f.id]) return bgs[f.id];
-    const img = el('image', { x: 0, y: 0, width: f.width, height: f.height, preserveAspectRatio: 'none', href: f.background }, bgLayer);
+    const img = layerImg(f, f.background, bgLayer);
     img.addEventListener('load', () => { if (f.id === S.floor) $('loading').hidden = true; });
     img.addEventListener('error', () => { if (f.id === S.floor) $('loading').textContent = 'Could not load this floor plan.'; });
     bgs[f.id] = img;
@@ -174,12 +197,15 @@
     for (const [fid, img] of Object.entries(bgs)) img.style.display = fid === id ? '' : 'none';
     const img = ensureBg(f);
     img.style.display = '';
+    ensureLayers(f);
     if (img.getBBox && img.dataset.loaded !== '1') $('loading').hidden = false;
     img.addEventListener('load', () => (img.dataset.loaded = '1'), { once: true });
     if (S.item && S.itemById[S.item].floor !== id) S.item = null;
     dimRect.setAttribute('width', f.width); dimRect.setAttribute('height', f.height);
-    const m = svg.querySelector('#hole');
-    m.setAttribute('x', 0); m.setAttribute('y', 0); m.setAttribute('width', f.width); m.setAttribute('height', f.height);
+    for (const sel of ['#hole', '#lab']) {
+      const m = svg.querySelector(sel);
+      m.setAttribute('x', 0); m.setAttribute('y', 0); m.setAttribute('width', f.width); m.setAttribute('height', f.height);
+    }
     if (changed || opts.refit) fit(true);
     render(opts);
   }
@@ -288,26 +314,48 @@
     if (S.item) hl = [S.itemById[S.item]];
     else if (cat) hl = S.items.filter((i) => i.category === cat.id && i.floor === f.id);
     const dimOn = !!(S.item || cat);
+    const layered = !!f.backgroundHighlight;
     dimRect.style.opacity = dimOn ? 1 : 0;
+    dimRect.classList.toggle('light', layered);
 
     maskG.innerHTML = '';
     hlLayer.innerHTML = '';
+    clipG.innerHTML = '';
     el('rect', { x: 0, y: 0, width: f.width, height: f.height, fill: '#fff' }, maskG);
+    if (layered && hl.some((i) => i._pts)) ensureFull(f);
     for (const it of hl) {
       const c = S.catById[it.category].color || '#e33';
       if (it._pts) {
         const d = it._pts.map((p) => p.join(',')).join(' ');
         el('polygon', { points: d, fill: '#000' }, maskG);
+        el('polygon', { points: d }, clipG);
         el('polygon', { points: d, class: 'hl-halo' }, hlLayer);
-        el('polygon', { points: d, class: 'hl', fill: c, stroke: c }, hlLayer);
-      } else {
+        el('polygon', { points: d, class: 'hl' + (layered ? ' over-full' : ''), fill: c, stroke: c }, hlLayer);
+      } else if (!f.labels) {
+        // no separate label layer: reveal the printed pin through the veil
         el('circle', { cx: it.pin[0], cy: it.pin[1], r: 40 / S.view.k, fill: '#000' }, maskG);
       }
     }
     S.hl = hl;
+    renderLabelMask(f, hl, dimOn);
+    $('labelsBtn').setAttribute('aria-pressed', S.allLabels);
+    $('labelsBtn').hidden = !f.labels;
     applyView();
     renderSheet(hl, cat, floorsWithCat);
     if (!opts.noUrl && S.ready) updateUrl();
+  }
+
+  // Which printed labels stay crisp. Mask luminance = opacity.
+  const FADED = '#4d4d4d'; // ~30 %
+  const CHROME = '#333'; // ~20 %: title, legend
+  function renderLabelMask(f, hl, selecting) {
+    labMaskG.innerHTML = '';
+    const box = (b, fill) => el('rect', { x: b[0], y: b[1], width: b[2], height: b[3], fill }, labMaskG);
+    if (S.allLabels) { box([0, 0, f.width, f.height], '#fff'); return; }
+    box([0, 0, f.width, f.height], selecting ? FADED : '#fff');
+    for (const b of f.chromeBoxes || []) box(b, CHROME);
+    if (selecting) for (const it of hl) for (const b of it.labelBoxes || []) box(b, '#fff');
+    for (const b of f.fixedBoxes || []) box(b, '#fff');
   }
 
   function placeMarkers() {
@@ -315,6 +363,9 @@
     if (!S.hl) return;
     const { k, x, y } = S.view;
     for (const it of S.hl) {
+      // printed pins/labels already show where things are; a marker only for
+      // the searched/tapped item, or things with nothing printed on the plan
+      if (S.item !== it.id && (it.labelBoxes?.length || it._pts)) continue;
       const cat = S.catById[it.category];
       const sx = x + k * it.pin[0], sy = y + k * it.pin[1];
       if (S.item === it.id && performance.now() - S.pulseAt < 3500) {
@@ -474,6 +525,11 @@
       zoomAt(px, py, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
     }, { passive: false });
     $('reset').addEventListener('click', () => fit(false));
+    $('labelsBtn').addEventListener('click', () => {
+      S.allLabels = !S.allLabels;
+      try { localStorage.setItem('venueMap.allLabels', S.allLabels ? '1' : '0'); } catch (e) { /* ignore */ }
+      render();
+    });
     let last = size();
     new ResizeObserver(() => {
       const now = size();

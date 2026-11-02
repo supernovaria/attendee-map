@@ -4,24 +4,90 @@
   "title": "Attendee map overlay",
   "description": "The only contract between producers (import script, a future editor, the layout planner) and the viewer. Unknown fields are allowed and ignored by the viewer.",
   "type": "object",
-  "required": ["schemaVersion", "updated", "floors", "categories", "items"],
+  "required": [
+    "schemaVersion",
+    "updated",
+    "floors",
+    "categories",
+    "items"
+  ],
   "properties": {
-    "schemaVersion": { "const": 1 },
-    "updated": { "type": "string", "format": "date-time", "description": "Shown to attendees as 'Map updated …'." },
+    "schemaVersion": {
+      "const": 1
+    },
+    "updated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Shown to attendees as 'Map updated …'."
+    },
     "floors": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["id", "name", "background", "width", "height"],
+        "required": [
+          "id",
+          "name",
+          "background",
+          "width",
+          "height"
+        ],
         "properties": {
-          "id": { "$ref": "#/$defs/id" },
-          "name": { "type": "string", "minLength": 1 },
-          "shortName": { "type": "string", "description": "Tab label; falls back to name." },
-          "order": { "type": "number" },
-          "background": { "type": "string", "pattern": "\\.(svg|png|webp|jpg|jpeg)$", "description": "Path relative to the site root. Stretched to fill width x height." },
-          "width": { "type": "number", "exclusiveMinimum": 0 },
-          "height": { "type": "number", "exclusiveMinimum": 0 }
+          "id": {
+            "$ref": "#/$defs/id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "shortName": {
+            "type": "string",
+            "description": "Tab label; falls back to name."
+          },
+          "order": {
+            "type": "number"
+          },
+          "background": {
+            "type": "string",
+            "pattern": "\\.(svg|png|webp|jpg|jpeg)$",
+            "description": "Path relative to the site root. Stretched to fill width x height."
+          },
+          "width": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "height": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "backgroundHighlight": {
+            "type": "string",
+            "pattern": "\\.(svg|png|webp|jpg|jpeg)$",
+            "description": "Optional. Same size as background, in full colour. Shown only inside highlighted shapes, so the background can be a muted version."
+          },
+          "labels": {
+            "type": "string",
+            "pattern": "\\.(svg|png|webp|jpg|jpeg)$",
+            "description": "Optional. Transparent image of printed labels/pins drawn above everything. Parts not relevant to the selection fade out (see item.labelBoxes)."
+          },
+          "chromeBoxes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/box"
+            },
+            "description": "Optional. Parts of the labels image that are page decoration (title, legend): faded unless 'All labels' is on."
+          },
+          "fixedBoxes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/box"
+            },
+            "description": "Optional. Parts of the labels image that are always fully shown (e.g. boxes hiding closed areas)."
+          },
+          "view": {
+            "$ref": "#/$defs/box",
+            "description": "Optional start view."
+          }
         }
       }
     },
@@ -29,14 +95,34 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "label"],
+        "required": [
+          "id",
+          "label"
+        ],
         "properties": {
-          "id": { "$ref": "#/$defs/id" },
-          "label": { "type": "string", "minLength": 1 },
-          "icon": { "type": "string", "description": "Name from the viewer's built-in icon set; unknown names show a dot." },
-          "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
-          "floor": { "type": "string", "description": "Optional: selecting this category switches to this floor." },
-          "chip": { "type": "boolean", "description": "false = no chip in the category bar (still searchable)." }
+          "id": {
+            "$ref": "#/$defs/id"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "icon": {
+            "type": "string",
+            "description": "Name from the viewer's built-in icon set; unknown names show a dot."
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$"
+          },
+          "floor": {
+            "type": "string",
+            "description": "Optional: selecting this category switches to this floor."
+          },
+          "chip": {
+            "type": "boolean",
+            "description": "false = no chip in the category bar (still searchable)."
+          }
         }
       }
     },
@@ -44,44 +130,139 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "floor", "category", "name", "pin"],
+        "required": [
+          "id",
+          "floor",
+          "category",
+          "name",
+          "pin"
+        ],
         "properties": {
-          "id": { "$ref": "#/$defs/id" },
-          "floor": { "type": "string" },
-          "category": { "type": "string" },
-          "name": { "type": "string", "minLength": 1 },
-          "description": { "type": "string" },
-          "aliases": { "type": "array", "items": { "type": "string" } },
-          "pin": { "$ref": "#/$defs/point" },
+          "id": {
+            "$ref": "#/$defs/id"
+          },
+          "floor": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pin": {
+            "$ref": "#/$defs/point"
+          },
           "shape": {
             "oneOf": [
               {
                 "type": "object",
-                "required": ["type", "points"],
+                "required": [
+                  "type",
+                  "points"
+                ],
                 "properties": {
-                  "type": { "const": "polygon" },
-                  "points": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/point" } }
+                  "type": {
+                    "const": "polygon"
+                  },
+                  "points": {
+                    "type": "array",
+                    "minItems": 3,
+                    "items": {
+                      "$ref": "#/$defs/point"
+                    }
+                  }
                 }
               },
               {
                 "type": "object",
-                "required": ["type", "x", "y", "width", "height"],
+                "required": [
+                  "type",
+                  "x",
+                  "y",
+                  "width",
+                  "height"
+                ],
                 "properties": {
-                  "type": { "const": "rect" },
-                  "x": { "type": "number" },
-                  "y": { "type": "number" },
-                  "width": { "type": "number", "exclusiveMinimum": 0 },
-                  "height": { "type": "number", "exclusiveMinimum": 0 }
+                  "type": {
+                    "const": "rect"
+                  },
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "width": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "height": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
                 }
               }
             ]
+          },
+          "labelBoxes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/box"
+            },
+            "description": "Optional. Where this item's printed label/pin sits in the floor's labels image: [x, y, width, height]."
           }
         }
       }
     }
   },
   "$defs": {
-    "id": { "type": "string", "minLength": 1, "description": "Opaque, stable. Used in deep links and printed QR codes: never change once published." },
-    "point": { "type": "array", "prefixItems": [{ "type": "number" }, { "type": "number" }], "minItems": 2, "maxItems": 2 }
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opaque, stable. Used in deep links and printed QR codes: never change once published."
+    },
+    "point": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "box": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "minItems": 4,
+      "maxItems": 4
+    }
   }
 }

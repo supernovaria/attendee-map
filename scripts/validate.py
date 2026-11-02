@@ -51,8 +51,9 @@ def main() -> int:
 
     site_root = path.resolve().parent.parent if path.resolve().parent.name == "data" else ROOT
     for f in data["floors"]:
-        if not (site_root / f["background"]).exists():
-            errors.append(f"floor '{f['id']}': background file '{f['background']}' not found")
+        for key in ("background", "backgroundHighlight", "labels"):
+            if key in f and not (site_root / f[key]).exists():
+                errors.append(f"floor '{f['id']}': {key} file '{f[key]}' not found")
     for c in data["categories"]:
         if "floor" in c and c["floor"] not in floors:
             errors.append(f"category '{c['id']}': floor '{c['floor']}' does not exist")
