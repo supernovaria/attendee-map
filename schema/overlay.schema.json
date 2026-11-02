@@ -92,6 +92,13 @@
             "type": "string",
             "pattern": "^#[0-9A-Fa-f]{6}$",
             "description": "Optional. Floor colour: bar next to that floor's rooms in the room list and search results."
+          },
+          "hiddenLabels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/shape"
+            },
+            "description": "Areas of the labels image that are never shown (unless the viewer asks for all labels), e.g. arrows not wanted on screen."
           }
         }
       }
@@ -184,6 +191,13 @@
               "$ref": "#/$defs/shape"
             },
             "description": "Optional, instead of or in addition to shape: several areas for one item (e.g. 'Nap Rooms' = four rooms)."
+          },
+          "labelsWhenSelected": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/shape"
+            },
+            "description": "Areas of the labels image shown only while this item (or its category) is highlighted, e.g. a printed box around a fair area."
           }
         }
       }

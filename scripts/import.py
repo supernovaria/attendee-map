@@ -408,6 +408,38 @@ def path_points(d):
     return out
 
 
+def footprint(shapes, scale, page_rect, pad):
+    """Outline(s) around drawn shapes, `pad` pt wider: what to mask out of the
+    label layer to hide them. shapes = [("fill"|"line", [(x, y), ...], width)]."""
+    m = np.zeros((int(page_rect.height * scale) + 1, int(page_rect.width * scale) + 1), np.uint8)
+    for kind, pts, w in shapes:
+        a = (np.array(pts) * scale).astype(np.int32)
+        if kind == "fill":
+            cv2.fillPoly(m, [a], 1)
+        else:
+            cv2.polylines(m, [a], False, 1, max(1, int(w * scale)))
+    k = max(3, int(2 * pad * scale) | 1)
+    m = cv2.dilate(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
+    cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    return [{"type": "polygon", "points": contour_to_poly(c, scale, 0.6)} for c in cnts if len(c) >= 3]
+
+
+def find_arrow(page, tip, covers, reach=8):
+    """Stroked line drawings (arrow shaft + head) with an end within `reach` pt of `tip`."""
+    found = []
+    for d in page.get_drawings():
+        if d.get("fill") is not None or d.get("color") is None:
+            continue
+        segs = [(it[1], it[2]) for it in d["items"] if it[0] == "l"]
+        if not segs or len(segs) != len(d["items"]):
+            continue
+        if is_hidden(d.get("seqno", 10**9), d["rect"], covers):
+            continue
+        if any(math.dist(q, tip) <= reach for a, b in segs for q in (a, b)):
+            found += [("line", [tuple(a), tuple(b)], d.get("width") or 1) for a, b in segs]
+    return found
+
+
 def find_outlined_areas(page, covers, legend):
     """Unfilled boxes with a coloured outline (e.g. the Org fair areas)."""
     out = []
@@ -698,6 +730,9 @@ def main():
                 "pin": [r1(ax), r1(ay)],
                 "labelBoxes": [xywh(area["rect"], 4), xywh(b["bbox"])],
             })
+            if c in CFG.get("boxesOnlyWhenSelected", []):
+                # the printed box itself is only shown while its category/item is selected
+                items[-1]["labelsWhenSelected"] = footprint([("fill", pts, 0)], scale, page.rect, 4)
             if len(fair_blocks) > 1:
                 issue(fname, f"Outlined box at {[round(v) for v in area['rect']]} assigned to \"{b['text']}\" (nearest of several fair labels).")
             st[cats[c]["label"] + " areas"] = st.get(cats[c]["label"] + " areas", 0) + 1
@@ -848,6 +883,17 @@ def main():
         Image.fromarray(layer, "RGBA").save(
             MAPS_DIR / f"{fid}-labels.webp", "WEBP", quality=80, method=6)
         floor_rec["chromeBoxes"] = chrome
+
+        # 7. arrows switched off in the config (hiddenArrows: floor -> arrow tips)
+        hidden = []
+        for tip in CFG.get("hiddenArrows", {}).get(fid, []):
+            segs = find_arrow(page, tip, covers)
+            if segs:
+                hidden += footprint(segs, scale, page.rect, 2.5)
+            else:
+                issue(fname, f"hiddenArrows: no arrow ends near {tip} any more (Canva layout changed?) - nothing hidden there.")
+        if hidden:
+            floor_rec["hiddenLabels"] = hidden
 
     # near-duplicate shades among vector fills vs key colours
     shade_check(doc, CFG)

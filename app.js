@@ -88,7 +88,9 @@
   };
   try { S.allLabels = localStorage.getItem('venueMap.allLabels') === '1'; } catch (e) { /* private mode */ }
   const svg = $('svg'), mapEl = $('map');
-  let vp, bgLayer, fullLayer, dimRect, maskG, hlLayer, labelLayer, clipG, labMaskG, markerLayer;
+  let vp, bgLayer, greyLayer, fullLayer, dimRect, maskG, hlLayer, labelGreyLayer, labelLayer, clipG, labMaskG, labGreyMaskG, markerLayer;
+  // ?outline=1 draws the old outline around highlighted areas (for comparing)
+  const OUTLINE = new URLSearchParams(location.search).get('outline') === '1';
   const bgs = {};
 
   // ---------------------------------------------------------------- load
@@ -144,8 +146,10 @@
 
   // ---------------------------------------------------------------- svg setup
   // Layers, bottom to top: background (muted when a full-colour copy exists),
-  // full-colour copy clipped to the selection, light veil, outlines, printed
-  // labels (masked per label), then screen-space markers.
+  // grey copy of it (shown while something is selected), full-colour copy
+  // clipped to the selection, light veil, highlight tint, printed labels
+  // (a grey faded copy for everything else + the colour copy for the
+  // selection, both masked per label), then screen-space markers.
   function buildSvg() {
     const defs = el('defs', {}, svg);
     const mask = el('mask', { id: 'hole', maskUnits: 'userSpaceOnUse' }, defs);
@@ -153,11 +157,15 @@
     clipG = el('clipPath', { id: 'sel', clipPathUnits: 'userSpaceOnUse' }, defs);
     const lm = el('mask', { id: 'lab', maskUnits: 'userSpaceOnUse' }, defs);
     labMaskG = el('g', {}, lm);
+    const lgm = el('mask', { id: 'labg', maskUnits: 'userSpaceOnUse' }, defs);
+    labGreyMaskG = el('g', {}, lgm);
     vp = el('g', {}, svg);
     bgLayer = el('g', {}, vp);
+    greyLayer = el('g', { class: 'grey-layer' }, vp);
     fullLayer = el('g', { 'clip-path': 'url(#sel)' }, vp);
     dimRect = el('rect', { class: 'dim', mask: 'url(#hole)' }, vp);
     hlLayer = el('g', {}, vp);
+    labelGreyLayer = el('g', { mask: 'url(#labg)' }, vp);
     labelLayer = el('g', { mask: 'url(#lab)' }, vp);
     markerLayer = el('g', {}, svg); // screen space: markers keep their size when zooming
   }
@@ -169,6 +177,49 @@
     if (f.labels && !labs[f.id]) labs[f.id] = layerImg(f, f.labels, labelLayer);
     showOnly(labs, f.id);
     showOnly(fulls, f.id);
+    showOnly(greyBgs, f.id);
+    showOnly(greyLabs, f.id);
+  }
+
+  // Grey copies of the plan and the labels, made in the browser (no extra
+  // download): while something is selected, everything else loses its colour
+  // instead of being darkened. Made once per floor, when the browser is idle.
+  const greyBgs = {}, greyLabs = {}, greyBusy = {};
+  const GREY_BG_SAT = 0.12, GREY_LAB_SAT = 0;
+  function greyed(src, sat) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const c = document.createElement('canvas');
+          c.width = img.naturalWidth; c.height = img.naturalHeight;
+          const ctx = c.getContext('2d', { willReadFrequently: true });
+          ctx.drawImage(img, 0, 0);
+          const d = ctx.getImageData(0, 0, c.width, c.height), a = d.data;
+          for (let i = 0; i < a.length; i += 4) {
+            const l = 0.299 * a[i] + 0.587 * a[i + 1] + 0.114 * a[i + 2];
+            a[i] = l + (a[i] - l) * sat; a[i + 1] = l + (a[i + 1] - l) * sat; a[i + 2] = l + (a[i + 2] - l) * sat;
+          }
+          ctx.putImageData(d, 0, 0);
+          c.toBlob((b) => (b ? resolve(URL.createObjectURL(b)) : reject(new Error('toBlob'))), 'image/webp', 0.85);
+        } catch (e) { reject(e); }
+      };
+      img.onerror = reject;
+      img.src = src;
+    });
+  }
+  function prepareGrey(f) {
+    if (greyBusy[f.id]) return;
+    greyBusy[f.id] = true;
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 200));
+    const done = (store, layer) => (url) => {
+      const im = layerImg(f, url, layer);
+      im.addEventListener('load', () => { store[f.id] = im; ensureLayers(f); if (f.id === S.floor) render({ noUrl: true }); }, { once: true });
+    };
+    idle(() => {
+      greyed(f.background, GREY_BG_SAT).then(done(greyBgs, greyLayer)).catch(() => {});
+      if (f.labels) greyed(f.labels, GREY_LAB_SAT).then(done(greyLabs, labelGreyLayer)).catch(() => {});
+    });
   }
   // the full-colour copy is only fetched once something on that floor is highlighted
   function ensureFull(f) {
@@ -212,7 +263,8 @@
     img.addEventListener('load', () => (img.dataset.loaded = '1'), { once: true });
     if (S.item && S.itemById[S.item].floor !== id) S.item = null;
     dimRect.setAttribute('width', f.width); dimRect.setAttribute('height', f.height);
-    for (const sel of ['#hole', '#lab']) {
+    prepareGrey(f);
+    for (const sel of ['#hole', '#lab', '#labg']) {
       const m = svg.querySelector(sel);
       m.setAttribute('x', 0); m.setAttribute('y', 0); m.setAttribute('width', f.width); m.setAttribute('height', f.height);
     }
@@ -327,6 +379,8 @@
     const layered = !!f.backgroundHighlight;
     dimRect.style.opacity = dimOn ? 1 : 0;
     dimRect.classList.toggle('light', layered);
+    greyLayer.style.opacity = dimOn && greyBgs[f.id] ? 1 : 0;
+    const outline = OUTLINE || !layered; // with a full-colour copy the colour itself is the highlight
 
     maskG.innerHTML = '';
     hlLayer.innerHTML = '';
@@ -340,9 +394,9 @@
           const d = poly.map((p) => p.join(',')).join(' ');
           el('polygon', { points: d, fill: '#000' }, maskG);
           el('polygon', { points: d }, clipG);
-          el('polygon', { points: d, class: 'hl-halo' }, hlLayer);
+          if (outline) el('polygon', { points: d, class: 'hl-halo' }, hlLayer);
           // dark category colours (e.g. rooms) would darken the area: brighten it instead
-          el('polygon', { points: d, class: 'hl' + (layered ? ' over-full' : '') + (isDark(c) ? ' lighten' : ''), fill: c, stroke: c }, hlLayer);
+          el('polygon', { points: d, class: 'hl' + (layered ? ' over-full' : '') + (isDark(c) ? ' lighten' : '') + (outline ? '' : ' no-line'), fill: c, stroke: c }, hlLayer);
         }
       } else if (!f.labels) {
         // no separate label layer: reveal the printed pin through the veil
@@ -352,23 +406,52 @@
     S.hl = hl;
     renderLabelMask(f, hl, dimOn);
     $('labelsBtn').setAttribute('aria-pressed', S.allLabels);
+    const lt = S.allLabels ? 'Fade labels of other things' : 'Show all labels as printed';
+    $('labelsBtn').title = lt; $('labelsBtn').setAttribute('aria-label', lt);
     $('labelsBtn').hidden = !f.labels;
     applyView();
     renderSheet(hl, cat, floorsWithCat);
     if (!opts.noUrl && S.ready) updateUrl();
   }
 
-  // Which printed labels stay crisp. Mask luminance = opacity.
-  const FADED = '#4d4d4d'; // ~30 %
+  // Which printed labels show, and how. Mask luminance = opacity.
+  // #lab masks the colour copy, #labg the grey copy (only while selecting).
+  const FADED = '#4d4d4d'; // ~30 %: colour labels faded (no grey copy yet)
+  const GREY = '#8c8c8c'; // ~55 %: grey copy of the other labels while selecting
   const CHROME = '#333'; // ~20 %: title, legend
   function renderLabelMask(f, hl, selecting) {
     labMaskG.innerHTML = '';
-    const box = (b, fill) => el('rect', { x: b[0], y: b[1], width: b[2], height: b[3], fill }, labMaskG);
-    if (S.allLabels) { box([0, 0, f.width, f.height], '#fff'); return; }
-    box([0, 0, f.width, f.height], selecting ? FADED : '#fff');
-    for (const b of f.chromeBoxes || []) box(b, CHROME);
-    if (selecting) for (const it of hl) for (const b of it.labelBoxes || []) box(b, '#fff');
-    for (const b of f.fixedBoxes || []) box(b, '#fff');
+    labGreyMaskG.innerHTML = '';
+    const draw = (g, s, fill) => {
+      if (Array.isArray(s)) return el('rect', { x: s[0], y: s[1], width: s[2], height: s[3], fill }, g);
+      const p = shapePoints(s);
+      if (p) el('polygon', { points: p.map((q) => q.join(',')).join(' '), fill }, g);
+    };
+    const all = [0, 0, f.width, f.height];
+    const greyOn = selecting && !S.allLabels && !!greyLabs[f.id];
+    labelGreyLayer.style.display = greyOn ? '' : 'none';
+    if (S.allLabels) { draw(labMaskG, all, '#fff'); return; }
+    const masks = greyOn ? [labMaskG, labGreyMaskG] : [labMaskG];
+    // base
+    draw(labMaskG, all, !selecting ? '#fff' : greyOn ? '#000' : FADED);
+    if (greyOn) draw(labGreyMaskG, all, GREY);
+    for (const b of f.chromeBoxes || []) {
+      draw(labMaskG, b, greyOn ? '#000' : CHROME);
+      if (greyOn) draw(labGreyMaskG, b, CHROME);
+    }
+    // the selection in full colour
+    const on = new Set(selecting ? hl : []);
+    for (const it of on) {
+      for (const b of it.labelBoxes || []) { draw(labMaskG, b, '#fff'); if (greyOn) draw(labGreyMaskG, b, '#000'); }
+      for (const s of it.labelsWhenSelected || []) { draw(labMaskG, s, '#fff'); if (greyOn) draw(labGreyMaskG, s, '#000'); }
+    }
+    // things printed only for a selection, and things never shown
+    for (const it of S.items) {
+      if (it.floor !== f.id || on.has(it) || !it.labelsWhenSelected) continue;
+      for (const s of it.labelsWhenSelected) for (const g of masks) draw(g, s, '#000');
+    }
+    for (const s of f.hiddenLabels || []) for (const g of masks) draw(g, s, '#000');
+    for (const b of f.fixedBoxes || []) draw(labMaskG, b, '#fff');
   }
 
   function placeMarkers() {
@@ -400,8 +483,10 @@
       .map((f) => `<button data-goto="${esc(f.id)}">${esc(f.name)}</button>`).join('');
     if (S.item) {
       const it = S.itemById[S.item], c = S.catById[it.category];
+      const n = S.items.filter((i) => i.category === c.id).length;
+      const allBtn = c.chip !== false && n > 1 ? `<div class="links"><button data-cat="${esc(c.id)}">Show all ${esc(c.label)} (${n})</button></div>` : '';
       sh.innerHTML = `${catDot(c)}<div class="grow"><div class="name">${esc(it.name)}</div>` +
-        `<div class="sub">${esc([it.description, c.label, S.floorById[it.floor].name].filter(Boolean).join(' · '))}</div></div>${close}`;
+        `<div class="sub">${esc([it.description, c.label, S.floorById[it.floor].name].filter(Boolean).join(' · '))}</div>${allBtn}</div>${close}`;
     } else if (cat) {
       const n = hl.length;
       const others = floorLinks(floorsWithCat);
@@ -418,6 +503,7 @@
     sh.hidden = false;
     sh.querySelector('.close').onclick = () => { S.item = null; S.cat = null; render(); };
     sh.querySelectorAll('[data-goto]').forEach((b) => (b.onclick = () => setFloor(b.dataset.goto)));
+    sh.querySelectorAll('[data-cat]').forEach((b) => (b.onclick = () => selectCat(b.dataset.cat, { force: true, keepFloor: true })));
   }
 
   // ---------------------------------------------------------------- categories
@@ -472,6 +558,7 @@
       if (S.floor !== S.floors[0].id) p.set('floor', S.floor);
       if (S.cat) p.set('cat', S.cat);
     }
+    if (OUTLINE) p.set('outline', '1');
     const qs = p.toString();
     history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
   }
@@ -599,6 +686,11 @@
     btn.addEventListener('click', () => (panel.hidden ? open() : close()));
     $('searchClose').addEventListener('click', close);
     input.addEventListener('input', runSearch);
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || !norm(input.value)) return;
+      const first = $('results').querySelector('button[data-item]');
+      if (first) { e.preventDefault(); first.click(); }
+    });
     $('allFloors').addEventListener('change', (e) => { S.allFloors = e.target.checked; runSearch(); });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { if (!panel.hidden) close(); else if (S.item || S.cat) { S.item = null; S.cat = null; render(); } }

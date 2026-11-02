@@ -428,5 +428,21 @@
     843,
     1191
   ],
-  "titleMaxY": 230
+  "titleMaxY": 230,
+  "boxesOnlyWhenSelected": [
+    "org-fair"
+  ],
+  "_hiddenArrows": "Arrow tips (PDF pt) per floor; the arrow ending there is never shown (except with 'All labels'). Ground floor: the Org fair title's top and bottom arrows.",
+  "hiddenArrows": {
+    "0": [
+      [
+        385.7,
+        458.6
+      ],
+      [
+        306.9,
+        587.0
+      ]
+    ]
+  }
 }

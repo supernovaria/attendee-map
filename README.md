@@ -13,9 +13,11 @@ Static files only: no server, no database, no login. Brief: [`venue-map-brief.md
 - **Floors**: tabs at the top. A dot on a tab means the selected category also exists on that floor.
 - **Categories**: chips at the bottom. Tap = highlight, tap again = clear. Org fair and Project fair jump to their floor automatically.
 - **Room list**: open search without typing: all rooms, grouped by floor (coloured bar per floor), opened at the floor you're on.
-- **Search**: magnifier, top right. Finds names, codes (`C3`, `MP C3`), descriptions (`speaker` → Darwin). Accents and case don't matter. "All floors" searches the whole building.
+- **Search**: magnifier, top right. Finds names, codes (`C3`, `MP C3`), descriptions (`speaker` → Darwin). Accents and case don't matter. "All floors" searches the whole building. Enter opens the first result.
+- **Card** of a selected thing: "Show all …" highlights the whole category.
 - **Tap anything on the map** to see what it is.
-- **Colours** on the plan are muted; whatever you select is shown in full colour with an outline.
+- **Colours** on the plan are muted. While something is selected, everything else turns grey (labels, pins, coloured areas) and only the selection keeps its colour; the plan's walls and outlines stay as they are. Add `&outline=1` to the URL to also draw an outline around selected areas (for comparison).
+- **Org fair**: the printed boxes only show while Org fair is selected. Of the three arrows from the *Organisations Fair* title only the middle one is shown (`hiddenArrows` in `scripts/import-config.json`).
 - **Labels**: with something selected, only its labels stay crisp and the rest fade. The **Aa** button (top right of the map) shows every label exactly as printed in the PDF; the choice is remembered on that phone.
 - **Zoom**: pinch, double-tap, mouse wheel; the corner button resets.
 - **Links for printed QR codes** (open a pre-filtered view):
@@ -87,7 +89,7 @@ Areas painted over by a box in Canva (e.g. a lift hidden with a grey box) are le
 
 Files it writes:
 
-- `maps/<floor>.webp`: the plan picture with colours muted (walls untouched). Loaded first.
+- `maps/<floor>.webp`: the plan picture with colours muted (walls untouched). Loaded first. (The grey copies used while something is selected are made by the browser from this file and the labels file; nothing extra to download.)
 - `maps/<floor>-labels.webp`: everything you drew in Canva (text, pins, arrows, boxes), on a transparent background, separated from the plan picture. Loaded first.
 - `maps/<floor>-full.webp`: the plan picture in full colour; only fetched when something on that floor is highlighted, and only shown inside the highlighted shapes.
 - Solid grey/white boxes drawn in Canva over the plan (e.g. hiding closed areas) are painted into the plan layers, so they are muted and dimmed with the plan and fading labels never reveals what they cover. Boxes that don't actually show in the PDF are ignored.
@@ -113,6 +115,8 @@ For any other tool that wants to produce this map (the layout planner, a future 
    - `floor.labels`: transparent image of printed labels drawn on top;
    - `item.labelBoxes`: `[x, y, w, h]` boxes where an item's printed label/pin sits in that image (kept crisp when the item is highlighted, faded otherwise);
    - `floor.chromeBoxes`: title/legend areas, faded unless *All labels* is on;
+   - `item.labelsWhenSelected`: shapes in the label image shown only while that item (or its category) is selected (e.g. the Org fair boxes);
+   - `floor.hiddenLabels`: shapes in the label image never shown, except with *All labels* (e.g. unwanted arrows);
    - `floor.fixedBoxes`: areas of the label image that are always fully shown.
 9. **Any tool may regenerate `data/overlay.json` and `maps/` as long as `python3 scripts/validate.py` passes.**
 
