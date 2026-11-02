@@ -1,0 +1,118 @@
+# Venue map (EAGxBerlin 2026, Urania Berlin)
+
+A phone-friendly page attendees open from a QR code. It shows the floor plans; tapping a category (Toilets, Food & snacks, Meeting points, …) dims everything else, and search jumps to a room or meeting point.
+
+Static files only: no server, no database, no login. Brief: [`venue-map-brief.md`](venue-map-brief.md).
+
+**Status (2 Nov 2026):** first working version. Not deployed yet (hosting is an open question). See *Open questions* and `import/import-report.md`.
+
+---
+
+## Using it
+
+- **Floors**: tabs at the top. A dot on a tab means the selected category also exists on that floor.
+- **Categories**: chips at the bottom. Tap = highlight, tap again = clear. Org fair and Project fair jump to their floor automatically.
+- **Search**: magnifier, top right. Finds names, codes (`C3`, `MP C3`), descriptions (`speaker` → Darwin). Accents and case don't matter. "All floors" searches the whole building.
+- **Tap anything on the map** to see what it is.
+- **Zoom**: pinch, double-tap, mouse wheel; the corner button resets.
+- **Links for printed QR codes** (open a pre-filtered view):
+  - `…/?floor=1&cat=toilets` (floor 1, toilets highlighted)
+  - `…/?item=mp-c3` (jumps to meeting point C3)
+  - The bare URL stays the main QR target.
+  - Item ids are listed in `data/overlay.json` and in the review pictures (`import/review/*.jpg`). **Never rename an id that has been printed.**
+
+## Updating the map
+
+Two kinds of change.
+
+### A. The floor plans changed in Canva
+
+1. In Canva: **File → Download → PDF Print**, with **"Flatten PDF" unticked**. **Do not change the Canva page size** (all positions are measured on the page; a different size moves every highlight).
+2. Replace `source/attendee-map.pdf` with the new file (same name).
+3. Run the import (needs Python 3 once: `pip install -r scripts/requirements.txt`):
+
+   ```bash
+   python3 scripts/import.py
+   ```
+
+4. Read `import/import-report.md` and look at `import/review/*.jpg`. Fix anything wrong via step B.
+5. Commit and push. The URL stays the same.
+
+Easiest if you're not at a terminal: ask Claude Code to "re-run the attendee map import with the new PDF, show me the report, and push".
+
+### B. Correct something the import got wrong
+
+Never edit `data/overlay.json` by hand; the next import overwrites it. Corrections go in **`import/overlay.overrides.json`**, which the import never touches:
+
+```json
+{
+  "items": {
+    "room-outside-area-1-1s": { "name": "Outside Area", "description": "1:1s" },
+    "stairs-1-3": null,
+    "mp-c3": { "aliases": ["Cafeteria meeting point"] }
+  },
+  "add": [
+    { "id": "first-aid-0", "floor": "0", "category": "first-aid", "name": "First aid", "pin": [300, 700] }
+  ],
+  "categories": { "lifts": { "enabled": true } },
+  "categoryOrder": ["toilets", "food", "meeting-points"],
+  "floors": { "0": { "shortName": "EG" } }
+}
+```
+
+- `"some-id": { … }` changes only the fields given; `"field": null` removes that field.
+- `"some-id": null` removes the item.
+- `add` adds items the import can't see (positions are in PDF points: the page is 843 × 1191, top-left is 0,0; the review pictures help to estimate).
+- `categories` changes or adds categories; `"enabled": false` hides a category and all its items.
+- Then run `python3 scripts/import.py` again (it merges and validates).
+
+## How the import works
+
+`scripts/import.py`, settings in `scripts/import-config.json`.
+
+| Thing on the map | Where it comes from | Reliability |
+|---|---|---|
+| Room names, descriptions | Visible text in the PDF | High. Hidden text behind the plan picture is ignored and reported. |
+| Meeting points | The orange pins + the nearest "Point …" label | High (17/17). Long arrows are flagged. |
+| Catering, Project fair | Dark-blue pins + nearest label | High |
+| Org fair areas | Outlined boxes drawn in Canva | High |
+| Charging station | End of the arrow from its label | Check on site |
+| Toilets, stairs, lifts, stages | **Colour in the floor-plan picture**, using the legend colours | Good, but check: the plan is one picture in the PDF, not shapes |
+| Room outlines | Flood-fill of the white floor around each label | Partial: open-plan areas and labels outside rooms get a pin only |
+
+Areas painted over by a box in Canva (e.g. a lift hidden with a grey box) are left out and reported.
+
+Files it writes:
+
+- `maps/<floor>.webp`: backgrounds the page loads (one per floor, ~70–150 KB).
+- `source/raster/<floor>.png` + `source/raster/rasters.json`: high-res copies with pixel sizes, kept for the layout planner (not loaded by the page).
+- `import/overlay.generated.json`: raw import result.
+- `data/overlay.json`: generated + overrides. **This is what the page reads.**
+- `import/import-report.md`, `import/review/*.jpg`: for review.
+
+## Data contract
+
+For any other tool that wants to produce this map (the layout planner, a future editor):
+
+1. The page reads **only** `data/overlay.json` plus the background files it names. Nothing in `import/`, `scripts/` or `source/`.
+2. Format: [`schema/overlay.schema.json`](schema/overlay.schema.json), `schemaVersion: 1`. Unknown fields are ignored, so producers may add extras (`"source": "planner"`, `"pxPerMeter"`, …).
+3. Coordinates are in each floor's own box (`width` × `height`); the background is stretched to fill it. PDF points, raster pixels, anything works, and floors may differ.
+4. Backgrounds can be `.svg`, `.png`, `.webp` (or `.jpg`), per floor.
+5. Floors, categories, labels, colours, icons and order all come from the data. Nothing venue-specific is in the code. A category whose items are all on one floor (or that sets `"floor"`) switches to that floor when selected.
+6. Ids are opaque, stable strings (they end up in printed QR codes).
+7. Shapes: `polygon` or `rect` only. Every item has a `pin` (the producer computes one if needed).
+8. Optional extras the viewer understands: `floor.shortName` (tab label), `floor.view` (`[x, y, w, h]` start view), `category.chip: false` (searchable, no chip), `item.description`.
+9. **Any tool may regenerate `data/overlay.json` and `maps/` as long as `python3 scripts/validate.py` passes.**
+
+Icon names available: `toilet food pin stairs bolt booth flask door lift stage info coat firstaid quiet registration` (anything else shows a dot).
+
+## Hosting
+
+Any static host works; the site is the repository root (`index.html`). Planned: GitHub Pages or Netlify, decision pending. The URL must never change once it's on printed QR codes.
+
+## Known gaps
+
+- Room outlines exist for about half the rooms; the rest highlight as a pin. Fine for search; add a `rect`/`polygon` via overrides where it matters.
+- No offline mode (deliberately: a stale cached map is worse than a slow one).
+- No German UI yet.
+- Toilets inside the Nap Rooms wing (ground floor) are not coloured on the plan, so they're not in the Toilets category.

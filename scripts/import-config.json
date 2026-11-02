@@ -1,0 +1,417 @@
+{
+  "_comment": "Settings for scripts/import.py. Floors and categories here are the starting point; hand corrections go in import/overlay.overrides.json, not here.",
+  "pdf": "source/attendee-map.pdf",
+  "backgroundWidthPx": 2000,
+  "rasterScale": 3,
+  "floors": [
+    {
+      "page": 0,
+      "id": "0",
+      "name": "Ground floor",
+      "shortName": "Ground",
+      "order": 0
+    },
+    {
+      "page": 1,
+      "id": "1",
+      "name": "1st floor",
+      "shortName": "1st",
+      "order": 1
+    },
+    {
+      "page": 2,
+      "id": "2",
+      "name": "2nd floor",
+      "shortName": "2nd",
+      "order": 2
+    },
+    {
+      "page": 3,
+      "id": "3",
+      "name": "3rd floor",
+      "shortName": "3rd",
+      "order": 3
+    }
+  ],
+  "_categoriesComment": "enabled:false = extracted for review but left out of data/overlay.json until Emily confirms (brief section 6).",
+  "categories": [
+    {
+      "id": "toilets",
+      "label": "Toilets",
+      "icon": "toilet",
+      "color": "#9446C2",
+      "enabled": true
+    },
+    {
+      "id": "food",
+      "label": "Food & snacks",
+      "icon": "food",
+      "color": "#0D3858",
+      "enabled": true
+    },
+    {
+      "id": "meeting-points",
+      "label": "Meeting points",
+      "icon": "pin",
+      "color": "#F95C32",
+      "enabled": true
+    },
+    {
+      "id": "stairs",
+      "label": "Stairs",
+      "icon": "stairs",
+      "color": "#E0A800",
+      "enabled": true
+    },
+    {
+      "id": "charging",
+      "label": "Charging",
+      "icon": "bolt",
+      "color": "#E08A00",
+      "enabled": true
+    },
+    {
+      "id": "org-fair",
+      "label": "Org fair",
+      "icon": "booth",
+      "color": "#E8402A",
+      "enabled": true
+    },
+    {
+      "id": "project-fair",
+      "label": "Project fair",
+      "icon": "flask",
+      "color": "#2A6FDB",
+      "enabled": true
+    },
+    {
+      "id": "rooms",
+      "label": "Rooms",
+      "icon": "door",
+      "color": "#555B66",
+      "enabled": true,
+      "chip": false
+    },
+    {
+      "id": "lifts",
+      "label": "Lifts",
+      "icon": "lift",
+      "color": "#4FAD31",
+      "enabled": false
+    },
+    {
+      "id": "stages",
+      "label": "Stages",
+      "icon": "stage",
+      "color": "#966B38",
+      "enabled": false
+    }
+  ],
+  "_rasterKeyComment": "Colour key for areas painted into the floor-plan picture (taken from the legend on each page). RGB as sampled from the raster.",
+  "rasterKey": [
+    {
+      "category": "stairs",
+      "legend": "Stairs",
+      "rgb": [
+        250,
+        200,
+        5
+      ],
+      "tolerance": 48,
+      "name": "Stairs"
+    },
+    {
+      "category": "toilets",
+      "legend": "Gender-neutral bathrooms",
+      "rgb": [
+        150,
+        72,
+        196
+      ],
+      "tolerance": 45,
+      "name": "Toilets"
+    },
+    {
+      "category": "lifts",
+      "legend": "Elevators",
+      "rgb": [
+        76,
+        172,
+        52
+      ],
+      "tolerance": 40,
+      "name": "Lift"
+    },
+    {
+      "category": "stages",
+      "legend": "Stages",
+      "rgb": [
+        150,
+        106,
+        56
+      ],
+      "tolerance": 30,
+      "name": "Stage"
+    }
+  ],
+  "_unkeyedColoursComment": "Colours seen in the plan that are deliberately not categories (reported, not imported).",
+  "ignoreRaster": [
+    {
+      "rgb": [
+        8,
+        200,
+        248
+      ],
+      "why": "Urania logo (cyan)"
+    },
+    {
+      "rgb": [
+        200,
+        168,
+        120
+      ],
+      "why": "Registration desk (tan) - no category yet"
+    },
+    {
+      "rgb": [
+        228,
+        84,
+        108
+      ],
+      "tolerance": 28,
+      "why": "pink building outline"
+    },
+    {
+      "rgb": [
+        252,
+        180,
+        180
+      ],
+      "tolerance": 28,
+      "why": "pink building outline"
+    },
+    {
+      "rgb": [
+        252,
+        156,
+        180
+      ],
+      "tolerance": 28,
+      "why": "pink building outline"
+    },
+    {
+      "rgb": [
+        252,
+        156,
+        156
+      ],
+      "tolerance": 28,
+      "why": "pink building outline"
+    },
+    {
+      "rgb": [
+        228,
+        108,
+        132
+      ],
+      "tolerance": 28,
+      "why": "pink building outline"
+    },
+    {
+      "rgb": [
+        252,
+        132,
+        156
+      ],
+      "tolerance": 28,
+      "why": "pink building outline"
+    },
+    {
+      "rgb": [
+        228,
+        108,
+        108
+      ],
+      "tolerance": 28,
+      "why": "pink building outline"
+    },
+    {
+      "rgb": [
+        156,
+        204,
+        228
+      ],
+      "tolerance": 28,
+      "why": "blue window lines"
+    },
+    {
+      "rgb": [
+        84,
+        180,
+        204
+      ],
+      "tolerance": 28,
+      "why": "blue window lines"
+    },
+    {
+      "rgb": [
+        108,
+        180,
+        228
+      ],
+      "tolerance": 28,
+      "why": "blue window lines"
+    },
+    {
+      "rgb": [
+        132,
+        204,
+        228
+      ],
+      "tolerance": 28,
+      "why": "blue window lines"
+    },
+    {
+      "rgb": [
+        180,
+        204,
+        228
+      ],
+      "tolerance": 28,
+      "why": "blue window lines"
+    },
+    {
+      "rgb": [
+        132,
+        180,
+        228
+      ],
+      "tolerance": 28,
+      "why": "blue window lines"
+    },
+    {
+      "rgb": [
+        204,
+        228,
+        156
+      ],
+      "tolerance": 28,
+      "why": "pale green building outline"
+    },
+    {
+      "rgb": [
+        204,
+        156,
+        204
+      ],
+      "tolerance": 28,
+      "why": "pale purple building outline"
+    },
+    {
+      "rgb": [
+        204,
+        156,
+        12
+      ],
+      "tolerance": 28,
+      "why": "dark-yellow stair edges"
+    },
+    {
+      "rgb": [
+        180,
+        156,
+        12
+      ],
+      "tolerance": 28,
+      "why": "dark-yellow stair edges"
+    },
+    {
+      "rgb": [
+        180,
+        132,
+        12
+      ],
+      "tolerance": 28,
+      "why": "dark-yellow stair edges"
+    },
+    {
+      "rgb": [
+        156,
+        132,
+        12
+      ],
+      "tolerance": 28,
+      "why": "dark-yellow stair edges"
+    },
+    {
+      "rgb": [
+        180,
+        156,
+        60
+      ],
+      "tolerance": 28,
+      "why": "dark-yellow stair edges"
+    },
+    {
+      "rgb": [
+        108,
+        84,
+        36
+      ],
+      "tolerance": 28,
+      "why": "dark-brown stage edges"
+    }
+  ],
+  "markers": {
+    "_comment": "Pin glyphs drawn in Canva, recognised by fill colour. 'category' fixed, or 'byLabel' = take category from nearest label.",
+    "meetingPin": {
+      "fill": [
+        0.976,
+        0.361,
+        0.196
+      ],
+      "category": "meeting-points"
+    },
+    "navyPin": {
+      "fill": [
+        0.051,
+        0.22,
+        0.345
+      ],
+      "byLabel": true
+    }
+  },
+  "labelCategories": [
+    {
+      "match": "^catering$",
+      "category": "food"
+    },
+    {
+      "match": "^project fair$",
+      "category": "project-fair"
+    },
+    {
+      "match": "^organi[sz]ations? fair$",
+      "category": "org-fair"
+    },
+    {
+      "match": "charging",
+      "category": "charging"
+    }
+  ],
+  "ignoreLabels": [
+    "^urania berlin$",
+    "^(ground|first|second|third) floor$",
+    "^to floors?\\b",
+    "^[0-9 ,&]+$",
+    "^to$",
+    "^floor [0-9]$"
+  ],
+  "legendBox": [
+    550,
+    1025,
+    843,
+    1191
+  ],
+  "titleMaxY": 230
+}

@@ -1,0 +1,14 @@
+{
+  "_comment": "Hand corrections on top of overlay.generated.json. The import script never overwrites this file. See README 'Correcting the map'. Keys starting with _ are ignored.",
+  "floors": {},
+  "categories": {},
+  "items": {
+    "_example_delete": "set an item id to null to remove it, e.g. \"stairs-1-3\": null",
+    "room-outside-area-1-1s": { "name": "Outside Area", "description": "1:1s", "aliases": ["Outdoor 1:1s"] },
+    "room-spontaneous-conversation-area": {
+      "_why": "Green box drawn in Canva; flood-fill cannot see it. Rect copied from the PDF.",
+      "shape": { "type": "rect", "x": 367.6, "y": 318.6, "width": 74.1, "height": 70.4 }
+    }
+  },
+  "add": []
+}

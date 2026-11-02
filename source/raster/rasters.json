@@ -1,0 +1,34 @@
+{
+ "0": {
+  "file": "source/raster/0.png",
+  "widthPx": 2529,
+  "heightPx": 3573,
+  "pxPerUnit": 3,
+  "floorWidth": 843.0,
+  "floorHeight": 1191.0
+ },
+ "1": {
+  "file": "source/raster/1.png",
+  "widthPx": 2529,
+  "heightPx": 3573,
+  "pxPerUnit": 3,
+  "floorWidth": 843.0,
+  "floorHeight": 1191.0
+ },
+ "2": {
+  "file": "source/raster/2.png",
+  "widthPx": 2529,
+  "heightPx": 3573,
+  "pxPerUnit": 3,
+  "floorWidth": 843.0,
+  "floorHeight": 1191.0
+ },
+ "3": {
+  "file": "source/raster/3.png",
+  "widthPx": 2529,
+  "heightPx": 3573,
+  "pxPerUnit": 3,
+  "floorWidth": 843.0,
+  "floorHeight": 1191.0
+ }
+}

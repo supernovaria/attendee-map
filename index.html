@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16181d" media="(prefers-color-scheme: dark)">
+<title>Venue Map</title>
+<meta name="description" content="Floor plans of the venue: find toilets, food, meeting points, rooms.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23F95C32' d='M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <nav class="floors" role="tablist" aria-label="Floors" id="floors"></nav>
+  <button class="icon-btn" id="searchBtn" aria-label="Search rooms and meeting points" aria-expanded="false" aria-controls="search">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3a7 7 0 0 1 5.6 11.2l5.1 5.1-1.4 1.4-5.1-5.1A7 7 0 1 1 10 3zm0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/></svg>
+  </button>
+</header>
+
+<section class="search" id="search" hidden>
+  <div class="search-row">
+    <input id="q" type="search" placeholder="Room, meeting point …" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Search">
+    <button class="icon-btn" id="searchClose" aria-label="Close search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg>
+    </button>
+  </div>
+  <label class="toggle"><input type="checkbox" id="allFloors"> <span>All floors</span></label>
+  <ul class="results" id="results" aria-live="polite"></ul>
+</section>
+
+<main class="map" id="map" aria-label="Floor plan">
+  <svg id="svg" role="img" aria-label="Floor plan"></svg>
+  <div class="loading" id="loading">Loading map …</div>
+  <button class="icon-btn reset" id="reset" aria-label="Reset zoom">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></svg>
+  </button>
+  <p class="updated" id="updated"></p>
+</main>
+
+<div class="sheet" id="sheet" hidden></div>
+
+<footer class="cats">
+  <div class="chips" id="chips" role="toolbar" aria-label="Show on map"></div>
+</footer>
+
+<script src="app.js" defer></script>
+</body>
+</html>
