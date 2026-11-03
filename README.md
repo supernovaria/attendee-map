@@ -14,7 +14,13 @@ Static files only: no server, no database, no login. Brief: [`venue-map-brief.md
 - **Categories**: chips at the bottom. Tap = highlight, tap again = clear. Org fair and Project fair jump to their floor automatically.
 - **Room list**: open search without typing: all rooms, grouped by floor (coloured bar per floor), opened at the floor you're on.
 - **Search**: magnifier, top right. Finds names, codes (`C3`, `MP C3`), descriptions (`speaker` → Darwin). Accents and case don't matter. "All floors" searches the whole building. Enter opens the first result.
-- **Card** of a selected thing: "Show all …" highlights the whole category.
+- **Card** at the bottom floats over the map (opening/closing it never moves the map).
+  - Tap its round icon to bring everything selected on this floor into view (zooms out only as far as needed), or to jump back to the selected item.
+  - On an item: **Share** (phones; *Copy link* on desktop) sends a link that opens the map on that spot, e.g. "meet me at C3". "All …" highlights the whole category.
+  - Nothing of that category on this floor: the card says so in red, a message appears in the middle of the map, and the floors that have it are buttons.
+- Selecting a category while zoomed into a part of the floor where none of them are moves the map so they're in view.
+- **Tap a printed label** (e.g. *Nap Rooms*) to select that thing; tapping the *Organisations Fair* title selects the whole Org fair.
+- **Floor tabs**: the current floor has a thin outline in that floor's colour; tapping it again shows the whole floor. Switching floor automatically (from search or a category) shows a short "Switched to …" message.
 - **Tap anything on the map** to see what it is.
 - **Colours** on the plan are muted. While something is selected, everything else turns grey (labels, pins, coloured areas) and only the selection keeps its colour; the plan's walls and outlines stay as they are. Add `&outline=1` to the URL to also draw an outline around selected areas (for comparison).
 - **Org fair**: the printed boxes only show while Org fair is selected. Of the three arrows from the *Organisations Fair* title only the middle one is shown (`hiddenArrows` in `scripts/import-config.json`).

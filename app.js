@@ -214,7 +214,12 @@
     const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 200));
     const done = (store, layer) => (url) => {
       const im = layerImg(f, url, layer);
-      im.addEventListener('load', () => { store[f.id] = im; ensureLayers(f); if (f.id === S.floor) render({ noUrl: true }); }, { once: true });
+      im.style.display = 'none'; // until ready, and only on its own floor
+      im.addEventListener('load', () => {
+        store[f.id] = im;
+        ensureLayers(S.floorById[S.floor]);
+        if (f.id === S.floor) render({ noUrl: true });
+      }, { once: true });
     };
     idle(() => {
       greyed(f.background, GREY_BG_SAT).then(done(greyBgs, greyLayer)).catch(() => {});
@@ -245,7 +250,9 @@
       b.dataset.floor = f.id;
       b.title = f.name;
       b.innerHTML = `<span>${esc(f.shortName || f.name)}</span>`;
-      b.addEventListener('click', () => setFloor(f.id));
+      if (f.color) b.style.setProperty('--fc', f.color);
+      // tapping the floor you're on again = show the whole floor
+      b.addEventListener('click', () => (f.id === S.floor ? fit(false) : setFloor(f.id)));
       nav.appendChild(b);
     }
   }
@@ -270,6 +277,7 @@
     }
     if (changed || opts.refit) fit(true);
     render(opts);
+    if (changed && S.ready && S.cat && !S.hl.length) toast(`No ${S.catById[S.cat].label} on this floor`);
   }
 
   // default view: the area that has items (or floor.view), not the whole page
@@ -348,10 +356,54 @@
     const wx = (px - x) / k, wy = (py - y) / k;
     setView({ k: nk, x: px - nk * wx, y: py - nk * wy }, true);
   }
-  function centreOn(it) {
+  // free part of the map: the card at the bottom floats over it
+  function freeBox() {
     const [cw, ch] = size();
+    const sh = $('sheet');
+    const bottom = sh.hidden ? 0 : sh.offsetHeight + 8;
+    return { x0: 0, y0: 44, x1: cw, y1: Math.max(ch * 0.4, ch - bottom) }; // y0: below the Aa button
+  }
+  function centreOn(it) {
+    const fb = freeBox();
     const k = Math.max(S.view.k, S.fitK * 2.2);
-    setView({ k, x: cw / 2 - k * it.pin[0], y: ch / 2 - k * it.pin[1] });
+    setView({ k, x: (fb.x0 + fb.x1) / 2 - k * it.pin[0], y: (fb.y0 + fb.y1) / 2 - k * it.pin[1] });
+  }
+  // world-space bounds of some items (shapes, else pins)
+  function bounds(items) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const it of items) for (const [x, y] of it._pts || [it.pin]) {
+      x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+    }
+    return isFinite(x0) ? { x0, y0, x1, y1 } : null;
+  }
+  // how many of these items are (at least partly) on screen right now
+  function countVisible(items) {
+    const fb = freeBox(), { k, x, y } = S.view;
+    return items.filter((it) => {
+      const b = bounds([it]);
+      return x + k * b.x1 > fb.x0 && x + k * b.x0 < fb.x1 && y + k * b.y1 > fb.y0 && y + k * b.y0 < fb.y1;
+    }).length;
+  }
+  // Bring all these items on screen with as little movement as possible:
+  // keep the zoom if they fit, else zoom out just enough; then pan the least.
+  function showItems(items, instant) {
+    const b = bounds(items);
+    if (!b) return;
+    const fb = freeBox(), m = 36; // margin: room for pins drawn above their spot
+    const aw = fb.x1 - fb.x0 - 2 * m, ah = fb.y1 - fb.y0 - 2 * m;
+    let { k, x, y } = S.view;
+    const need = Math.min(aw / Math.max(b.x1 - b.x0, 1), ah / Math.max(b.y1 - b.y0, 1));
+    if (k > need) {
+      // zoom out around the middle of the free area
+      const cx = (fb.x0 + fb.x1) / 2, cy = (fb.y0 + fb.y1) / 2;
+      const nk = Math.max(need, S.fitK * 0.6);
+      x = cx - (cx - x) * (nk / k); y = cy - (cy - y) * (nk / k); k = nk;
+    }
+    const sx0 = x + k * b.x0, sx1 = x + k * b.x1, sy0 = y + k * b.y0, sy1 = y + k * b.y1;
+    const lo = (a0, a1, l, h) => (a1 - a0 > h - l ? (l + h) / 2 - (a0 + a1) / 2 : a0 < l ? l - a0 : a1 > h ? h - a1 : 0);
+    x += lo(sx0, sx1, fb.x0 + m, fb.x1 - m);
+    y += lo(sy0, sy1, fb.y0 + m, fb.y1 - m);
+    setView({ k, x, y }, instant);
   }
 
   // ---------------------------------------------------------------- render
@@ -484,18 +536,20 @@
     if (S.item) {
       const it = S.itemById[S.item], c = S.catById[it.category];
       const n = S.items.filter((i) => i.category === c.id).length;
-      const allBtn = c.chip !== false && n > 1 ? `<div class="links"><button data-cat="${esc(c.id)}">Show all ${esc(c.label)} (${n})</button></div>` : '';
-      sh.innerHTML = `${catDot(c)}<div class="grow"><div class="name">${esc(it.name)}</div>` +
-        `<div class="sub">${esc([it.description, c.label, S.floorById[it.floor].name].filter(Boolean).join(' · '))}</div>${allBtn}</div>${close}`;
+      const allBtn = c.chip !== false && n > 1 ? `<button data-cat="${esc(c.id)}">All ${esc(c.label)} (${n})</button>` : '';
+      const share = `<button data-share="1">${navigator.share ? 'Share' : 'Copy link'}</button>`;
+      const links = `<div class="links">${share}${allBtn}</div>`;
+      sh.innerHTML = `${dotBtn(c, 'Show it on the map')}<div class="grow"><div class="name">${esc(it.name)}</div>` +
+        `<div class="sub">${esc([it.description, c.label, S.floorById[it.floor].name].filter(Boolean).join(' · '))}</div>${links}</div>${close}`;
     } else if (cat) {
       const n = hl.length;
       const others = floorLinks(floorsWithCat);
       let txt;
       if (!floorsWithCat.size) txt = `${esc(cat.label)}: not on the map yet.`;
-      else if (!n) txt = `No ${esc(cat.label)} on ${esc(S.floorById[S.floor].name)}. On:`;
+      else if (!n) txt = `<span class="none">No ${esc(cat.label)} on the ${esc(S.floorById[S.floor].name)}</span><br>Go to:`;
       else txt = `${esc(cat.label)}: ${n} on this floor.` + (others ? ' Also on:' : '');
-      sh.innerHTML = `${catDot(cat)}<div class="grow"><div class="name">${txt}</div>` +
-        (others ? `<div class="links">${others}</div>` : '') + `</div>${close}`;
+      sh.innerHTML = (n ? dotBtn(cat, `Show all ${cat.label} on this floor`) : catDot(cat)) + `<div class="grow"><div class="name">${txt}</div>` +
+        (others ? `<div class="links${n ? '' : ' strong'}">${others}</div>` : '') + `</div>${close}`;
     } else {
       sh.hidden = true;
       return;
@@ -504,6 +558,37 @@
     sh.querySelector('.close').onclick = () => { S.item = null; S.cat = null; render(); };
     sh.querySelectorAll('[data-goto]').forEach((b) => (b.onclick = () => setFloor(b.dataset.goto)));
     sh.querySelectorAll('[data-cat]').forEach((b) => (b.onclick = () => selectCat(b.dataset.cat, { force: true, keepFloor: true })));
+    const dot = sh.querySelector('.dot-btn');
+    if (dot) dot.onclick = () => {
+      if (S.item) { S.pulseAt = performance.now(); centreOn(S.itemById[S.item]); setTimeout(placeMarkers, 3600); }
+      else showItems(S.hl);
+    };
+    const shareBtn = sh.querySelector('[data-share]');
+    if (shareBtn) shareBtn.onclick = () => shareItem(S.itemById[S.item]);
+  }
+  function dotBtn(c, label) {
+    return `<button class="dot-btn" aria-label="${esc(label)}" title="${esc(label)}">${catDot(c)}</button>`;
+  }
+  // "meet me at C3": a link that opens the map on that spot
+  function shareItem(it) {
+    const url = `${location.origin}${location.pathname}?item=${encodeURIComponent(it.id)}`;
+    const f = S.floorById[it.floor];
+    if (navigator.share) {
+      navigator.share({ title: it.name, text: `${it.name} (${f.name})`, url }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => toast('Link copied'), () => toast(url, 5000));
+    } else toast(url, 5000);
+  }
+
+  // short message in the middle of the map
+  let toastT = 0;
+  function toast(text, ms = 2200) {
+    const t = $('toast');
+    t.textContent = text;
+    t.hidden = false;
+    t.classList.remove('out');
+    clearTimeout(toastT);
+    toastT = setTimeout(() => { t.classList.add('out'); toastT = setTimeout(() => (t.hidden = true), 300); }, ms);
   }
 
   // ---------------------------------------------------------------- categories
@@ -529,8 +614,17 @@
     const floors = [...new Set(S.items.filter((i) => i.category === id).map((i) => i.floor))];
     // "lives on one floor": explicit category.floor, or all its items are on one floor
     const target = (c.floor && S.floorById[c.floor]) ? c.floor : (floors.length === 1 ? floors[0] : null);
-    if (target && target !== S.floor && !opts.keepFloor) setFloor(target, opts);
-    else render(opts);
+    if (target && target !== S.floor && !opts.keepFloor) {
+      setFloor(target, opts);
+      if (S.ready) toast(`${c.label}: ${S.floorById[target].name}`);
+    } else {
+      render(opts);
+      if (S.ready) {
+        if (!S.hl.length && floors.length) toast(`No ${c.label} on this floor`);
+        // none of them on screen (zoomed into another corner): bring them in
+        else if (S.hl.length && !countVisible(S.hl)) requestAnimationFrame(() => showItems(S.hl));
+      }
+    }
     const chip = document.querySelector(`.chip[data-cat="${CSS.escape(id)}"]`);
     if (chip) chip.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
   }
@@ -541,7 +635,10 @@
     S.cat = null;
     S.item = id;
     S.pulseAt = performance.now();
-    if (it.floor !== S.floor) setFloor(it.floor, { noUrl: true });
+    if (it.floor !== S.floor) {
+      setFloor(it.floor, { noUrl: true });
+      if (S.ready) toast(`Switched to the ${S.floorById[it.floor].name}`);
+    }
     render(opts);
     if (opts.instant) {
       const [cw, ch] = size();
@@ -631,6 +728,9 @@
       render();
     });
     let last = size();
+    // the floating card's height lifts the zoom button and the "updated" line
+    const sheet = $('sheet');
+    new ResizeObserver(() => mapEl.style.setProperty('--sheet-h', sheet.hidden ? '0px' : sheet.offsetHeight + 8 + 'px')).observe(sheet);
     new ResizeObserver(() => {
       const now = size();
       if (now[0] === last[0] && now[1] === last[1]) return;
@@ -661,6 +761,25 @@
     for (const it of here) {
       const d = Math.hypot(it.pin[0] - wx, it.pin[1] - wy) * k;
       if (d < bd && (!S.cat || it.category === S.cat)) { bd = d; best = it; }
+    }
+    // then a printed label (text), e.g. tapping "Nap Rooms"
+    if (!best) {
+      let ba = 4000; // pt²: only label-sized boxes, not whole areas
+      const hits = [];
+      for (const it of here) {
+        if (S.cat && it.category !== S.cat) continue;
+        for (const [bx, by, bw, bh] of it.labelBoxes || []) {
+          if (wx < bx || wx > bx + bw || wy < by || wy > by + bh || bw * bh > ba) continue;
+          if (bw * bh < ba) { ba = bw * bh; hits.length = 0; }
+          hits.push(it);
+        }
+      }
+      // one label shared by several areas of one category (Org fair title): show the category
+      if (hits.length > 1 && hits.every((i) => i.category === hits[0].category) && S.catById[hits[0].category].chip !== false) {
+        selectCat(hits[0].category, { force: true, keepFloor: true });
+        return;
+      }
+      best = hits[0] || null;
     }
     if (!best) {
       const inside = here.filter((i) => i._polys.some((poly) => inPoly(wx, wy, poly)) && (!S.cat || i.category === S.cat))
