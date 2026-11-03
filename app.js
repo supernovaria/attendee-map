@@ -277,7 +277,6 @@
     }
     if (changed || opts.refit) fit(true);
     render(opts);
-    if (changed && S.ready && S.cat && !S.hl.length) toast(`No ${S.catById[S.cat].label} on this floor`);
   }
 
   // default view: the area that has items (or floor.view), not the whole page
@@ -416,7 +415,7 @@
       const on = b.dataset.floor === S.floor;
       b.setAttribute('aria-selected', on);
       b.tabIndex = on ? 0 : -1;
-      const dot = floorsWithCat.has(b.dataset.floor) && !on;
+      const dot = floorsWithCat.has(b.dataset.floor);
       b.innerHTML = `<span>${esc(S.floorById[b.dataset.floor].shortName || S.floorById[b.dataset.floor].name)}</span>` +
         (dot ? `<span class="has" style="background:${cat.color || 'currentColor'}" title="Has ${esc(cat.label)}"></span>` : '');
     });
@@ -463,6 +462,7 @@
     $('labelsBtn').hidden = !f.labels;
     applyView();
     renderSheet(hl, cat, floorsWithCat);
+    if (!$('search').hidden && S.searchCat !== S.cat) { $('onlyCat').checked = true; syncCatToggle(); runSearch(); }
     if (!opts.noUrl && S.ready) updateUrl();
   }
 
@@ -620,9 +620,8 @@
     } else {
       render(opts);
       if (S.ready) {
-        if (!S.hl.length && floors.length) toast(`No ${c.label} on this floor`);
         // none of them on screen (zoomed into another corner): bring them in
-        else if (S.hl.length && !countVisible(S.hl)) requestAnimationFrame(() => showItems(S.hl));
+        if (S.hl.length && !countVisible(S.hl)) requestAnimationFrame(() => showItems(S.hl));
       }
     }
     const chip = document.querySelector(`.chip[data-cat="${CSS.escape(id)}"]`);
@@ -798,6 +797,8 @@
     const panel = $('search'), btn = $('searchBtn'), input = $('q');
     const open = () => {
       panel.hidden = false; btn.setAttribute('aria-expanded', 'true');
+      $('onlyCat').checked = true; // with a category selected, search starts within it
+      syncCatToggle();
       runSearch();
       if (!matchMedia('(pointer: coarse)').matches) input.focus(); // on phones the keyboard would cover the room list
     };
@@ -811,6 +812,7 @@
       if (first) { e.preventDefault(); first.click(); }
     });
     $('allFloors').addEventListener('change', (e) => { S.allFloors = e.target.checked; runSearch(); });
+    $('onlyCat').addEventListener('change', runSearch);
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { if (!panel.hidden) close(); else if (S.item || S.cat) { S.item = null; S.cat = null; render(); } }
       if (e.key === '/' && panel.hidden && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); open(); }
@@ -850,13 +852,23 @@
       (sub ? `<br><span class="sub">${esc(sub)}</span>` : '') + `</span></button></li>`;
   }
 
-  // empty search = every named room, grouped by floor, opened at the current floor
+  // the "Only <category>" toggle: shown while a category is selected on the map
+  function syncCatToggle() {
+    const cat = S.cat && S.catById[S.cat];
+    $('onlyCatWrap').hidden = !cat;
+    if (cat) $('onlyCatLabel').textContent = `Only ${cat.label}`;
+    S.searchCat = S.cat;
+  }
+  const searchCat = () => (S.cat && $('onlyCat').checked ? S.cat : null);
+
+  // empty search = every named room (or everything in the selected category),
+  // grouped by floor, opened at the current floor
   const ROOM_CAT = 'rooms';
-  function renderRoomList(ul) {
-    const rooms = S.items.filter((i) => i.category === ROOM_CAT);
+  function renderRoomList(ul, cat) {
+    const rooms = S.items.filter((i) => i.category === (cat || ROOM_CAT));
     if (!rooms.length) { ul.innerHTML = `<li class="hint">Type a room name or a meeting point like “C3”.</li>`; return; }
     ul.innerHTML = S.floors.map((f) => {
-      const here = rooms.filter((i) => i.floor === f.id).sort((a, b) => a.name.localeCompare(b.name));
+      const here = rooms.filter((i) => i.floor === f.id).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
       if (!here.length) return '';
       return `<li class="floor-head" data-floor-head="${esc(f.id)}" style="--floor:${esc(f.color || 'transparent')}">${esc(f.name)}</li>` +
         here.map((it) => resultRow(it, false)).join('');
@@ -867,15 +879,16 @@
 
   function runSearch() {
     const q = $('q').value, ul = $('results');
-    const all = search(q);
+    const cat = searchCat();
+    const all = search(q).filter((i) => !cat || i.category === cat);
     const list = S.allFloors ? all : all.filter((i) => i.floor === S.floor);
-    if (!norm(q)) { renderRoomList(ul); return; }
+    if (!norm(q)) { renderRoomList(ul, cat); return; }
     let html = list.slice(0, 40).map((it) => resultRow(it, S.allFloors)).join('');
     const elsewhere = all.length - list.length;
     if (!S.allFloors && elsewhere > 0) {
       html += `<li class="hint">${list.length ? '' : 'Nothing on this floor. '}${elsewhere} more on other floors – <button data-all="1">search all floors</button></li>`;
     } else if (!all.length) {
-      html = `<li class="hint">No matches for “${esc(q)}”.</li>`;
+      html = `<li class="hint">No matches for “${esc(q)}”${cat ? ` in ${esc(S.catById[cat].label)}` : ''}.</li>`;
     }
     ul.innerHTML = html;
   }

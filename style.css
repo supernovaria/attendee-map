@@ -7,7 +7,7 @@
   --chip-on: #16181d;
   --chip-on-fg: #ffffff;
   --accent: #F95C32;
-  --warn: #C8102E;
+  --warn: #EE2B47;
   --dim: rgba(255, 255, 255, 0.74);
   --dim-light: rgba(255, 255, 255, 0.12);
   --map-bg: #ffffff;
@@ -23,7 +23,7 @@
     --chip: #23262d;
     --chip-on: #eef0f4;
     --chip-on-fg: #16181d;
-    --warn: #FF6B6B;
+    --warn: #FF8080;
     --dim: rgba(10, 12, 16, 0.66);
     --dim-light: rgba(10, 12, 16, 0.16);
     --map-bg: #23262d;
@@ -33,7 +33,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #16181d; --fg: #eef0f4; --muted: #a3a9b6; --line: #2c3038; --chip: #23262d;
-  --chip-on: #eef0f4; --chip-on-fg: #16181d; --warn: #FF6B6B; --dim: rgba(10, 12, 16, 0.66); --dim-light: rgba(10, 12, 16, 0.16); --map-bg: #23262d;
+  --chip-on: #eef0f4; --chip-on-fg: #16181d; --warn: #FF8080; --dim: rgba(10, 12, 16, 0.66); --dim-light: rgba(10, 12, 16, 0.16); --map-bg: #23262d;
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.5); --map-filter: brightness(0.92);
 }
 
@@ -82,6 +82,8 @@ svg { display: block; }
   background: var(--bg); color: var(--fg); font-size: 16px; /* 16px stops iOS zooming in */
 }
 .toggle { display: inline-flex; align-items: center; gap: 8px; padding: 10px 2px; color: var(--muted); cursor: pointer; }
+.toggles { display: flex; flex-wrap: wrap; column-gap: 20px; }
+.toggle[hidden] { display: none; }
 .toggle input { width: 20px; height: 20px; accent-color: var(--accent); }
 .results { list-style: none; margin: 0; padding: 0 0 8px; overflow-y: auto; }
 .results li button {

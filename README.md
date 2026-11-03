@@ -10,14 +10,14 @@ Static files only: no server, no database, no login. Brief: [`venue-map-brief.md
 
 ## Using it
 
-- **Floors**: tabs at the top. A dot on a tab means the selected category also exists on that floor.
+- **Floors**: tabs at the top. A dot on a tab means the selected category exists on that floor (including the one you're on).
 - **Categories**: chips at the bottom. Tap = highlight, tap again = clear. Org fair and Project fair jump to their floor automatically.
 - **Room list**: open search without typing: all rooms, grouped by floor (coloured bar per floor), opened at the floor you're on.
-- **Search**: magnifier, top right. Finds names, codes (`C3`, `MP C3`), descriptions (`speaker` → Darwin). Accents and case don't matter. "All floors" searches the whole building. Enter opens the first result.
+- **Search**: magnifier, top right. Finds names, codes (`C3`, `MP C3`), descriptions (`speaker` → Darwin). Accents and case don't matter. "All floors" searches the whole building. With a category selected (e.g. Meeting points), search opens showing just that category, grouped by floor; untick "Only Meeting points" to search everything. Enter opens the first result.
 - **Card** at the bottom floats over the map (opening/closing it never moves the map).
   - Tap its round icon to bring everything selected on this floor into view (zooms out only as far as needed), or to jump back to the selected item.
   - On an item: **Share** (phones; *Copy link* on desktop) sends a link that opens the map on that spot, e.g. "meet me at C3". "All …" highlights the whole category.
-  - Nothing of that category on this floor: the card says so in red, a message appears in the middle of the map, and the floors that have it are buttons.
+  - Nothing of that category on this floor: the card says so in red, and the floors that have it are buttons.
 - Selecting a category while zoomed into a part of the floor where none of them are moves the map so they're in view.
 - **Tap a printed label** (e.g. *Nap Rooms*) to select that thing; tapping the *Organisations Fair* title selects the whole Org fair.
 - **Floor tabs**: the current floor has a thin outline in that floor's colour; tapping it again shows the whole floor. Switching floor automatically (from search or a category) shows a short "Switched to …" message.
