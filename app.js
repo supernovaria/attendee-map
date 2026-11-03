@@ -88,7 +88,7 @@
   };
   try { S.allLabels = localStorage.getItem('venueMap.allLabels') === '1'; } catch (e) { /* private mode */ }
   const svg = $('svg'), mapEl = $('map');
-  let vp, bgLayer, greyLayer, fullLayer, dimRect, maskG, hlLayer, labelGreyLayer, labelLayer, clipG, labMaskG, labGreyMaskG, markerLayer;
+  let vp, bgLayer, greyLayer, fullLayer, dimRect, maskG, hlLayer, labelGreyLayer, labelLayer, traceLayer, clipG, labMaskG, labGreyMaskG, markerLayer;
   // ?outline=1 draws the old outline around highlighted areas (for comparing)
   const OUTLINE = new URLSearchParams(location.search).get('outline') === '1';
   const bgs = {};
@@ -178,6 +178,7 @@
     hlLayer = el('g', {}, vp);
     labelGreyLayer = el('g', { mask: 'url(#labg)' }, vp);
     labelLayer = el('g', { mask: 'url(#lab)' }, vp);
+    traceLayer = el('g', { class: 'trace-layer' }, vp); // outline drawn by the card's round icon
     markerLayer = el('g', {}, svg); // screen space: markers keep their size when zooming
   }
 
@@ -450,6 +451,9 @@
 
     maskG.innerHTML = '';
     hlLayer.innerHTML = '';
+    // the selection changed: stop the outline of the old one
+    const same = S.hl && S.hl.length === hl.length && hl.every((it, i) => S.hl[i] === it);
+    if (!same) { clearTimeout(traceT); traceLayer.innerHTML = ''; }
     clipG.innerHTML = '';
     el('rect', { x: 0, y: 0, width: f.width, height: f.height, fill: '#fff' }, maskG);
     if (layered && hl.some((i) => i._pts)) ensureFull(f);
@@ -524,6 +528,13 @@
     for (const b of f.fixedBoxes || []) draw(labMaskG, b, '#fff');
   }
 
+  // where a marker's tip goes: top middle of the printed label box that
+  // contains the pin, else the pin itself
+  function markerSpot(it) {
+    const [px, py] = it.pin;
+    const b = (it.labelBoxes || []).find(([bx, by, bw, bh]) => px >= bx && px <= bx + bw && py >= by && py <= by + bh);
+    return b ? [b[0] + b[2] / 2, b[1]] : it.pin;
+  }
   function placeMarkers() {
     markerLayer.innerHTML = '';
     const { k, x, y } = S.view;
@@ -547,8 +558,12 @@
       // the searched/tapped item, or things with nothing printed on the plan
       if (S.item !== it.id && (it.labelBoxes?.length || it._pts)) continue;
       const cat = S.catById[it.category];
-      const sx = x + k * it.pin[0], sy = y + k * it.pin[1];
-      if (S.item === it.id && performance.now() - S.pulseAt < 3500) {
+      // the pin is often the middle of the printed name: then stand on top of
+      // the name (its label box), so the marker never covers it
+      const [ax, ay] = markerSpot(it);
+      const sx = x + k * ax, sy = y + k * ay - (ay !== it.pin[1] ? 2 : 0);
+      // ripple only where nothing else shows it: a highlighted room needs none
+      if (S.item === it.id && !it._polys.length && performance.now() - S.pulseAt < 3500) {
         el('circle', { class: 'pulse', cx: sx, cy: sy, r: 14 }, markerLayer);
       }
       // teardrop: the tip is exactly on the spot, the head floats above it
@@ -615,9 +630,31 @@
     if (dot) dot.onclick = () => {
       if (S.item) { S.pulseAt = performance.now(); centreOn(S.itemById[S.item]); setTimeout(placeMarkers, 3600); }
       else showItems(withHere(S.hl));
+      traceOutlines(S.hl);
     };
     const shareBtn = sh.querySelector('[data-share]');
     if (shareBtn) shareBtn.onclick = () => shareItem(S.itemById[S.item]);
+  }
+  // The card's round icon: draw an outline around the things it shows, keep
+  // it a moment, then fade it out (timing: .trace in style.css). Shapes get
+  // their outline, things with only a pin a circle around it.
+  const TRACE_MS = 2000; // draw 1 s + stay 0.5 s + fade 0.5 s
+  let traceT = 0;
+  function traceOutlines(items) {
+    clearTimeout(traceT);
+    traceLayer.innerHTML = '';
+    const k = animState ? animState.to.k : S.view.k; // the zoom it is moving to
+    for (const it of items || []) {
+      const c = S.catById[it.category].color || '#e33';
+      const shapes = it._polys.length
+        ? it._polys.map((poly) => ['polygon', { points: poly.map((q) => q.join(',')).join(' ') }])
+        : [['circle', { cx: it.pin[0], cy: it.pin[1], r: 26 / k }]];
+      for (const [tag, a] of shapes) {
+        el(tag, { ...a, class: 'trace-halo', pathLength: 1 }, traceLayer);
+        el(tag, { ...a, class: 'trace', pathLength: 1, stroke: c }, traceLayer);
+      }
+    }
+    traceT = setTimeout(() => (traceLayer.innerHTML = ''), TRACE_MS + 100);
   }
   function dotBtn(c, label) {
     return `<button class="dot-btn" aria-label="${esc(label)}" title="${esc(label)}">${catDot(c)}</button>`;

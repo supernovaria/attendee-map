@@ -127,6 +127,20 @@ svg { display: block; }
 .hl.over-full { fill-opacity: .1; }
 .hl.lighten { fill: #fff; fill-opacity: .45; }
 .hl.no-line { stroke: none; }
+/* the card's round icon: outline drawn around what it shows (1 s), stays 0.5 s, fades (0.5 s) */
+.trace-layer { pointer-events: none; }
+.trace, .trace-halo {
+  fill: none; vector-effect: non-scaling-stroke; stroke-linejoin: round; stroke-linecap: round;
+  stroke-dasharray: 1 1; stroke-dashoffset: 1;
+  animation: trace-draw 1s ease-in-out forwards, trace-fade .5s ease-in 1.5s forwards;
+}
+.trace { stroke-width: 4; }
+.trace-halo { stroke: #fff; stroke-width: 8; opacity: .9; }
+@keyframes trace-draw { to { stroke-dashoffset: 0; } }
+@keyframes trace-fade { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .trace, .trace-halo { stroke-dashoffset: 0; animation: trace-fade .5s ease-in 1.5s forwards; }
+}
 .grey-layer { transition: opacity .18s; pointer-events: none; }
 .marker .bg { stroke: #fff; stroke-width: 2.5; filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
 .marker .glyph { fill: #fff; }
