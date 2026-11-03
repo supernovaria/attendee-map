@@ -82,7 +82,7 @@
   // ---------------------------------------------------------------- state
   const S = {
     data: null, floors: [], floorById: {}, cats: [], catById: {}, items: [], itemById: {},
-    floor: null, cat: null, item: null, allFloors: false,
+    floor: null, cat: null, item: null, allFloors: true,
     view: { k: 1, x: 0, y: 0 }, fitK: 1, pulseAt: 0, ready: false,
     allLabels: false,
   };
@@ -462,7 +462,10 @@
     $('labelsBtn').hidden = !f.labels;
     applyView();
     renderSheet(hl, cat, floorsWithCat);
-    if (!$('search').hidden && S.searchCat !== S.cat) { $('onlyCat').checked = true; syncCatToggle(); runSearch(); }
+    if (!$('search').hidden) {
+      if (S.searchCat !== S.cat) { $('onlyCat').checked = true; syncCatToggle(); runSearch(); }
+      else if (S.searchFloor !== S.floor) runSearch(); // follow the floor you switched to
+    }
     if (!opts.noUrl && S.ready) updateUrl();
   }
 
@@ -800,6 +803,7 @@
       $('onlyCat').checked = true; // with a category selected, search starts within it
       syncCatToggle();
       runSearch();
+      requestAnimationFrame(scrollToFloor); // some browsers restore the old scroll position on reopening
       if (!matchMedia('(pointer: coarse)').matches) input.focus(); // on phones the keyboard would cover the room list
     };
     const close = () => { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
@@ -811,6 +815,7 @@
       const first = $('results').querySelector('button[data-item]');
       if (first) { e.preventDefault(); first.click(); }
     });
+    $('allFloors').checked = S.allFloors;
     $('allFloors').addEventListener('change', (e) => { S.allFloors = e.target.checked; runSearch(); });
     $('onlyCat').addEventListener('change', runSearch);
     document.addEventListener('keydown', (e) => {
@@ -840,7 +845,8 @@
         if (it.category === 'rooms' || it._pts == null) score -= 0.1; // named places first
         return { it, score };
       })
-      .sort((a, b) => a.score - b.score || (S.floorById[a.it.floor].order ?? 0) - (S.floorById[b.it.floor].order ?? 0) || a.it.name.localeCompare(b.it.name))
+      .sort((a, b) => a.score - b.score || (b.it.floor === S.floor) - (a.it.floor === S.floor) || // this floor first
+        (S.floorById[a.it.floor].order ?? 0) - (S.floorById[b.it.floor].order ?? 0) || a.it.name.localeCompare(b.it.name, undefined, { numeric: true }))
       .map((r) => r.it);
   }
 
@@ -867,18 +873,26 @@
   function renderRoomList(ul, cat) {
     const rooms = S.items.filter((i) => i.category === (cat || ROOM_CAT));
     if (!rooms.length) { ul.innerHTML = `<li class="hint">Type a room name or a meeting point like “C3”.</li>`; return; }
-    ul.innerHTML = S.floors.map((f) => {
+    const floors = S.allFloors ? S.floors : [S.floorById[S.floor]];
+    ul.innerHTML = floors.map((f) => {
       const here = rooms.filter((i) => i.floor === f.id).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
       if (!here.length) return '';
       return `<li class="floor-head" data-floor-head="${esc(f.id)}" style="--floor:${esc(f.color || 'transparent')}">${esc(f.name)}</li>` +
         here.map((it) => resultRow(it, false)).join('');
-    }).join('');
+    }).join('') || `<li class="hint">None on this floor – <button data-all="1">show all floors</button></li>`;
+    scrollToFloor();
+  }
+  // open the list at the current floor's heading
+  function scrollToFloor() {
+    const ul = $('results');
     const head = ul.querySelector(`[data-floor-head="${CSS.escape(S.floor)}"]`);
-    ul.scrollTop = head ? head.offsetTop - ul.offsetTop : 0;
+    ul.scrollTop = 0; // measure with nothing stuck (the headings are sticky)
+    if (head) ul.scrollTop = head.offsetTop - ul.offsetTop;
   }
 
   function runSearch() {
     const q = $('q').value, ul = $('results');
+    S.searchFloor = S.floor;
     const cat = searchCat();
     const all = search(q).filter((i) => !cat || i.category === cat);
     const list = S.allFloors ? all : all.filter((i) => i.floor === S.floor);
