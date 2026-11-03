@@ -70,6 +70,16 @@
             "pattern": "\\.(svg|png|webp|jpg|jpeg)$",
             "description": "Optional. Transparent image of printed labels/pins drawn above everything. Parts not relevant to the selection fade out (see item.labelBoxes)."
           },
+          "dark": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Optional. Dark-mode versions of the pictures above (same size). The viewer uses them when the page is dark; a missing one falls back to the light picture.",
+            "properties": {
+              "background": { "type": "string", "pattern": "\\.(svg|png|webp|jpg|jpeg)$" },
+              "backgroundHighlight": { "type": "string", "pattern": "\\.(svg|png|webp|jpg|jpeg)$" },
+              "labels": { "type": "string", "pattern": "\\.(svg|png|webp|jpg|jpeg)$" }
+            }
+          },
           "chromeBoxes": {
             "type": "array",
             "items": {

@@ -2,6 +2,16 @@
   "_comment": "Settings for scripts/import.py. Floors and categories here are the starting point; hand corrections go in import/overlay.overrides.json, not here.",
   "pdf": "source/attendee-map.pdf",
   "backgroundWidthPx": 2000,
+  "dark": {
+    "_comment": "Dark-mode map pictures. floor = colour of white paper (match --map-bg in style.css), wall = colour of black lines and text. greyGamma > 1 keeps light-grey rooms darker. Coloured pixels: colourKeep scales them, minColourLightness lifts dark ones (navy text), mutedLightness/mutedSaturation are for the muted base plan.",
+    "floor": "#1e2127",
+    "wall": "#d6d9e0",
+    "greyGamma": 1.5,
+    "colourKeep": 0.9,
+    "minColourLightness": 0.5,
+    "mutedLightness": 0.45,
+    "mutedSaturation": 0.3
+  },
   "rasterScale": 3,
   "floors": [
     {

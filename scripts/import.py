@@ -7,6 +7,7 @@ Run from the repository root:
 
 What it does (see README "How the import works"):
   1. Renders one background picture per floor  -> maps/<floor>.webp
+     (plus dark-mode copies                     -> maps/<floor>-dark.webp etc.)
      and a high-res PNG per floor               -> source/raster/<floor>.png
   2. Reads the visible text labels, the pins drawn in Canva and the outlined
      boxes (vector data in the PDF).
@@ -283,6 +284,33 @@ def mute(rgb):
     muted = (grey + (1 - grey) * 0.55) + (a - grey) * 0.22
     out = a * (1 - k) + muted * k
     return (out.clip(0, 1) * 255).astype(np.uint8)
+
+
+def hexrgb(h):
+    return np.array([int(h.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4)], np.float32) / 255
+
+
+def darken(rgb, muted=False):
+    """Dark-mode copy (settings: "dark" in the config). Greys get their
+    lightness flipped (white floor -> dark, black walls/text -> light),
+    coloured pixels keep their colour: dark ones (navy) are lifted so they
+    stay readable; with `muted` they recede into the dark floor instead,
+    like mute() does for the light plan."""
+    d = CFG["dark"]
+    floor, wall = hexrgb(d["floor"]), hexrgb(d["wall"])
+    luma = np.array([0.299, 0.587, 0.114], np.float32)
+    a = rgb.astype(np.float32) / 255
+    y = (a * luma).sum(2, keepdims=True)
+    k = np.clip((a.max(2, keepdims=True) - a.min(2, keepdims=True)) / 0.2, 0, 1)
+    grey = floor + (1 - y) ** d["greyGamma"] * (wall - floor)
+    col = a * d["colourKeep"]
+    yc = (col * luma).sum(2, keepdims=True)
+    if muted:
+        col = yc * d["mutedLightness"] + (col - yc) * d["mutedSaturation"]
+    else:
+        col = col + np.maximum(0, d["minColourLightness"] - yc)
+    out = grey * (1 - k) + col * k
+    return (out.clip(0, 1) * 255).round().astype(np.uint8)
 
 
 def uncomposite(C, B):
@@ -630,6 +658,11 @@ def main():
             "background": f"maps/{fid}.webp",
             "backgroundHighlight": f"maps/{fid}-full.webp",
             "labels": f"maps/{fid}-labels.webp",
+            "dark": {
+                "background": f"maps/{fid}-dark.webp",
+                "backgroundHighlight": f"maps/{fid}-full-dark.webp",
+                "labels": f"maps/{fid}-labels-dark.webp",
+            },
             "width": r1(W), "height": r1(H),
         })
         floor_rec = floors[-1]
@@ -886,6 +919,11 @@ def main():
         Image.fromarray(B).save(MAPS_DIR / f"{fid}-full.webp", "WEBP", quality=74, method=6)
         Image.fromarray(layer, "RGBA").save(
             MAPS_DIR / f"{fid}-labels.webp", "WEBP", quality=80, method=6)
+        # the same three for dark mode (labels keep their transparency)
+        Image.fromarray(darken(B, muted=True)).save(MAPS_DIR / f"{fid}-dark.webp", "WEBP", quality=74, method=6)
+        Image.fromarray(darken(B)).save(MAPS_DIR / f"{fid}-full-dark.webp", "WEBP", quality=74, method=6)
+        Image.fromarray(np.dstack([darken(layer[..., :3]), layer[..., 3]]), "RGBA").save(
+            MAPS_DIR / f"{fid}-labels-dark.webp", "WEBP", quality=80, method=6)
         floor_rec["chromeBoxes"] = chrome
 
         # 7. arrows switched off in the config (hiddenArrows: floor -> arrow tips)

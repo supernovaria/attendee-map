@@ -67,7 +67,7 @@ Coordinates everywhere are **PDF points of the page** (843 × 1191). That is why
    - Flood-fill of the white floor around each label (`room_shape`). Doorways are closed by eroding by `DOOR` pt and dilating back; an outline is rejected if it leaks or doesn't contain its label.
    - Labels **outside the building** (Nap Rooms, Prayer Room, Parents Room) follow their thin leader lines. The lines are found by Hough on the label layer (`leader_targets`). From the line's end, `behind_wall` steps through the wall and `room_near` takes the room found there; failing that, it takes the nearest indoor room to the line's end. One item can therefore have several `shapes`.
 5. "To floor …" notes and lift digits become `labelBoxes` of the nearest stairs or lift.
-6. **Layers.** C = page render, B = plan-only render (Canva cover boxes painted in, title strip blanked). `uncomposite(C, B)` solves *F over B = C* for an RGBA layer F: that's `-labels.webp`. `mute(B)` desaturates/lightens saturated pixels only (walls stay black) → `<floor>.webp`. B itself → `-full.webp`.
+6. **Layers.** C = page render, B = plan-only render (Canva cover boxes painted in, title strip blanked). `uncomposite(C, B)` solves *F over B = C* for an RGBA layer F: that's `-labels.webp`. `mute(B)` desaturates/lightens saturated pixels only (walls stay black) → `<floor>.webp`. B itself → `-full.webp`. `darken()` makes the three `-dark` copies (`floor.dark`): grey pixels get their lightness flipped between `dark.floor` and `dark.wall` (with `greyGamma` so light-grey rooms stay dark), coloured pixels keep their colour (dark ones lifted to `minColourLightness`; for the muted plan they recede instead). The labels layer keeps its alpha.
 7. **Hidden arrows.** `hiddenArrows` in the config lists arrow *tips* per floor; `find_arrow` collects the stroked lines ending there, `footprint` turns them into polygons → `floor.hiddenLabels`. If an arrow moved in Canva the report says so and nothing is hidden.
 
 Then: write `overlay.generated.json`, merge overrides (`merge`: `_`-prefixed keys are comments and are dropped), write `data/overlay.json`, review pictures, report, validate.
@@ -122,6 +122,12 @@ Pins within 22 px, then printed labels (`labelBoxes` up to 4000 pt²; a label sh
 - `S.way` is a third selection mode next to `item` and `cat` (render: `item` > `way` > `cat`); it ends when you leave its floor. Not in the URL.
 - `connects` comes from the import (lift digits and "To floor …" notes, step 5); 2nd-floor stairs are overrides (their labels are hidden text), matched by position with the floors above and below. Stairs without `connects` are never suggested.
 
+### Colours (light / dark)
+
+- `<html data-theme>` = `light` / `dark`, or absent for automatic. An inline line in `index.html` sets it from `localStorage['venueMap.theme']` before anything draws; the round button (`#themeBtn`, under Aa) cycles auto → light → dark.
+- `pic(f, key)` picks `f.dark[key]` while the page is dark. `applyMapTheme()` (button or the phone's own setting changing) swaps the `href` of every floor picture already made and rebuilds the grey copies; `greyGen` drops copies of the old theme still being made.
+- CSS: `--map-bg` = `dark.floor` (so the map edge doesn't show), `--lighten` = room tint (0.45 light, 0.14 dark: a bright tint washed out the white text).
+
 ### Search
 
 - `search()` normalises accents and case and matches tokens or a compact form ("mpc3") against name, item aliases, description, category label and category aliases. Ranking: name prefix > name contains > other, this floor first.
@@ -141,6 +147,7 @@ Pins within 22 px, then printed labels (`labelBoxes` up to 4000 pt²; a label sh
 - Hosting: GitHub Pages, repo public. Possibly Cloudflare Pages + private repo later. **Moving host changes the URL and breaks printed QR codes**; settle it (or use an own domain) before printing.
 - "No X on this floor": red text on the card only. A centre-screen message was tried and judged too much. The "Switched to …" message for automatic floor changes stays.
 - Floor colours (room list bars, tab hairline): ground red `#D7263D`, 1st grey `#8A8F98`, 2nd green `#2E9E4F`, 3rd black `#111111` (lightened in dark mode).
+- 3 Nov: true dark map, made by the import (not a CSS filter, which shifts colours; not in the browser, which costs older phones time). Colours keep their hue so the map still matches the chips and the printed posters. Auto / Light / Dark button, because people may want a bright map in a sunny foyer while their phone is dark (or the other way round).
 - No offline mode on purpose: a stale cached map is worse than a slow one.
 - 3 Nov: everyday search words live in the overrides (`aliases` on categories and items), not in code. Meal times are the catering items' `description`. A start view zoomed to the building (`floor.view`) was considered and dropped: on a portrait phone the building already fills the width, the empty space is the title/legend above and below.
 - 3 Nov: "How to get here" highlights lifts and stairs on the floor you come from rather than drawing a route: the plan has no walkable paths, and the stair/lift choice is what people actually get wrong.

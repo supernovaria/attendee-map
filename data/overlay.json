@@ -1,6 +1,6 @@
 {
  "schemaVersion": 1,
- "updated": "2026-11-03T22:33:38+01:00",
+ "updated": "2026-11-03T23:14:59+01:00",
  "floors": [
   {
    "id": "0",
@@ -11,6 +11,11 @@
    "background": "maps/0.webp",
    "backgroundHighlight": "maps/0-full.webp",
    "labels": "maps/0-labels.webp",
+   "dark": {
+    "background": "maps/0-dark.webp",
+    "backgroundHighlight": "maps/0-full-dark.webp",
+    "labels": "maps/0-labels-dark.webp"
+   },
    "width": 843.0,
    "height": 1191.0,
    "chromeBoxes": [
@@ -179,6 +184,11 @@
    "background": "maps/1.webp",
    "backgroundHighlight": "maps/1-full.webp",
    "labels": "maps/1-labels.webp",
+   "dark": {
+    "background": "maps/1-dark.webp",
+    "backgroundHighlight": "maps/1-full-dark.webp",
+    "labels": "maps/1-labels-dark.webp"
+   },
    "width": 843.0,
    "height": 1191.0,
    "chromeBoxes": [
@@ -211,6 +221,11 @@
    "background": "maps/2.webp",
    "backgroundHighlight": "maps/2-full.webp",
    "labels": "maps/2-labels.webp",
+   "dark": {
+    "background": "maps/2-dark.webp",
+    "backgroundHighlight": "maps/2-full-dark.webp",
+    "labels": "maps/2-labels-dark.webp"
+   },
    "width": 843.0,
    "height": 1191.0,
    "chromeBoxes": [
@@ -243,6 +258,11 @@
    "background": "maps/3.webp",
    "backgroundHighlight": "maps/3-full.webp",
    "labels": "maps/3-labels.webp",
+   "dark": {
+    "background": "maps/3-dark.webp",
+    "backgroundHighlight": "maps/3-full-dark.webp",
+    "labels": "maps/3-labels-dark.webp"
+   },
    "width": 843.0,
    "height": 1191.0,
    "chromeBoxes": [

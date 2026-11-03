@@ -93,6 +93,18 @@
   const OUTLINE = new URLSearchParams(location.search).get('outline') === '1';
   const bgs = {};
 
+  // ---------------------------------------------------------------- theme
+  // Auto (follow the phone) / Light / Dark. The choice is <html data-theme>,
+  // set before the page draws by the line in index.html; the map uses the
+  // floor's `dark` pictures while the page is dark.
+  const THEMES = ['auto', 'light', 'dark'];
+  const darkMq = matchMedia('(prefers-color-scheme: dark)');
+  const themeChoice = () => document.documentElement.dataset.theme || 'auto';
+  const pageIsDark = () => themeChoice() === 'dark' || (themeChoice() === 'auto' && darkMq.matches);
+  let mapDark = pageIsDark();
+  // the picture for a floor in the current theme (light one if there's no dark copy)
+  const pic = (f, key) => (mapDark && f.dark && f.dark[key]) || f[key];
+
   // ---------------------------------------------------------------- load
   fetch(DATA_URL, { cache: 'no-cache' })
     .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
@@ -125,6 +137,7 @@
     showUpdated(data.updated);
     bindMap();
     bindSearch();
+    bindTheme();
 
     // deep links: ?item=  or  ?floor= & cat=, plus ?here= (QR code on a sign:
     // "You are here" at that item's spot, kept while browsing)
@@ -186,7 +199,7 @@
   const layerImg = (f, href, parent) => el('image', { x: 0, y: 0, width: f.width, height: f.height, preserveAspectRatio: 'none', href }, parent);
   function showOnly(store, id) { for (const [fid, im] of Object.entries(store)) im.style.display = fid === id ? '' : 'none'; }
   function ensureLayers(f) {
-    if (f.labels && !labs[f.id]) labs[f.id] = layerImg(f, f.labels, labelLayer);
+    if (f.labels && !labs[f.id]) labs[f.id] = layerImg(f, pic(f, 'labels'), labelLayer);
     showOnly(labs, f.id);
     showOnly(fulls, f.id);
     showOnly(greyBgs, f.id);
@@ -197,6 +210,7 @@
   // download): while something is selected, everything else loses its colour
   // instead of being darkened. Made once per floor, when the browser is idle.
   const greyBgs = {}, greyLabs = {}, greyBusy = {};
+  let greyGen = 0; // bumped when the theme changes: late copies of the old theme are dropped
   const GREY_BG_SAT = 0.12, GREY_LAB_SAT = 0;
   function greyed(src, sat) {
     return new Promise((resolve, reject) => {
@@ -223,8 +237,10 @@
   function prepareGrey(f) {
     if (greyBusy[f.id]) return;
     greyBusy[f.id] = true;
+    const gen = greyGen;
     const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 200));
     const done = (store, layer) => (url) => {
+      if (gen !== greyGen) { URL.revokeObjectURL(url); return; }
       const im = layerImg(f, url, layer);
       im.style.display = 'none'; // until ready, and only on its own floor
       im.addEventListener('load', () => {
@@ -234,22 +250,68 @@
       }, { once: true });
     };
     idle(() => {
-      greyed(f.background, GREY_BG_SAT).then(done(greyBgs, greyLayer)).catch(() => {});
-      if (f.labels) greyed(f.labels, GREY_LAB_SAT).then(done(greyLabs, labelGreyLayer)).catch(() => {});
+      if (gen !== greyGen) return;
+      greyed(pic(f, 'background'), GREY_BG_SAT).then(done(greyBgs, greyLayer)).catch(() => {});
+      if (f.labels) greyed(pic(f, 'labels'), GREY_LAB_SAT).then(done(greyLabs, labelGreyLayer)).catch(() => {});
     });
   }
   // the full-colour copy is only fetched once something on that floor is highlighted
   function ensureFull(f) {
-    if (f.backgroundHighlight && !fulls[f.id]) fulls[f.id] = layerImg(f, f.backgroundHighlight, fullLayer);
+    if (f.backgroundHighlight && !fulls[f.id]) fulls[f.id] = layerImg(f, pic(f, 'backgroundHighlight'), fullLayer);
     showOnly(fulls, f.id);
   }
   function ensureBg(f) {
     if (bgs[f.id]) return bgs[f.id];
-    const img = layerImg(f, f.background, bgLayer);
+    const img = layerImg(f, pic(f, 'background'), bgLayer);
     img.addEventListener('load', () => { if (f.id === S.floor) $('loading').hidden = true; });
     img.addEventListener('error', () => { if (f.id === S.floor) $('loading').textContent = 'Could not load this floor plan.'; });
     bgs[f.id] = img;
     return img;
+  }
+
+  // the theme changed: swap every floor picture already made, redo the grey copies
+  function applyMapTheme() {
+    const dark = pageIsDark();
+    syncThemeBtn();
+    if (dark === mapDark) return;
+    mapDark = dark;
+    if (!S.ready && !S.floors.length) return;
+    for (const [store, key] of [[bgs, 'background'], [fulls, 'backgroundHighlight'], [labs, 'labels']]) {
+      for (const [fid, im] of Object.entries(store)) im.setAttribute('href', pic(S.floorById[fid], key));
+    }
+    greyGen++;
+    for (const store of [greyBgs, greyLabs]) {
+      for (const [fid, im] of Object.entries(store)) {
+        const url = im.getAttribute('href');
+        im.remove();
+        if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
+        delete store[fid];
+      }
+    }
+    for (const fid of Object.keys(greyBusy)) delete greyBusy[fid];
+    const f = S.floorById[S.floor];
+    if (f) { prepareGrey(f); render({ noUrl: true }); }
+  }
+  const THEME_TEXT = { auto: 'Colours: automatic (like your phone)', light: 'Colours: light', dark: 'Colours: dark' };
+  function syncThemeBtn() {
+    const b = $('themeBtn'), t = themeChoice();
+    b.dataset.mode = t;
+    b.title = THEME_TEXT[t] + ' – tap to change';
+    b.setAttribute('aria-label', THEME_TEXT[t] + '. Tap to change.');
+    const bar = pageIsDark() ? '#16181d' : '#ffffff';
+    for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.setAttribute('content', bar);
+  }
+  function bindTheme() {
+    $('themeBtn').addEventListener('click', () => {
+      const next = THEMES[(THEMES.indexOf(themeChoice()) + 1) % THEMES.length];
+      if (next === 'auto') delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = next;
+      try { if (next === 'auto') localStorage.removeItem('venueMap.theme'); else localStorage.setItem('venueMap.theme', next); } catch (e) { /* ignore */ }
+      applyMapTheme();
+      toast({ auto: 'Colours follow your phone', light: 'Light colours', dark: 'Dark colours' }[next], 1600);
+    });
+    darkMq.addEventListener('change', applyMapTheme);
+    syncThemeBtn();
   }
 
   // ---------------------------------------------------------------- floors

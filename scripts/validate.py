@@ -54,6 +54,9 @@ def main() -> int:
         for key in ("background", "backgroundHighlight", "labels"):
             if key in f and not (site_root / f[key]).exists():
                 errors.append(f"floor '{f['id']}': {key} file '{f[key]}' not found")
+            dk = f.get("dark", {})
+            if key in dk and not (site_root / dk[key]).exists():
+                errors.append(f"floor '{f['id']}': dark.{key} file '{dk[key]}' not found")
     for c in data["categories"]:
         if "floor" in c and c["floor"] not in floors:
             errors.append(f"category '{c['id']}': floor '{c['floor']}' does not exist")

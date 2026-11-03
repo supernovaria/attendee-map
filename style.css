@@ -13,6 +13,7 @@
   --map-bg: #ffffff;
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
   --map-filter: none;
+  --lighten: 0.45; /* white tint on rooms (dark category colours) */
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -26,15 +27,16 @@
     --warn: #FF8080;
     --dim: rgba(10, 12, 16, 0.66);
     --dim-light: rgba(10, 12, 16, 0.16);
-    --map-bg: #23262d;
+    --map-bg: #1e2127; /* = "dark.floor" in scripts/import-config.json */
     --shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
-    --map-filter: brightness(0.92);
+    --map-filter: none; /* the map has its own dark pictures */
+    --lighten: 0.14;
   }
 }
 :root[data-theme="dark"] {
   --bg: #16181d; --fg: #eef0f4; --muted: #a3a9b6; --line: #2c3038; --chip: #23262d;
-  --chip-on: #eef0f4; --chip-on-fg: #16181d; --warn: #FF8080; --dim: rgba(10, 12, 16, 0.66); --dim-light: rgba(10, 12, 16, 0.16); --map-bg: #23262d;
-  --shadow: 0 2px 12px rgba(0, 0, 0, 0.5); --map-filter: brightness(0.92);
+  --chip-on: #eef0f4; --chip-on-fg: #16181d; --warn: #FF8080; --dim: rgba(10, 12, 16, 0.66); --dim-light: rgba(10, 12, 16, 0.16); --map-bg: #1e2127;
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.5); --map-filter: none; --lighten: 0.14;
 }
 
 * { box-sizing: border-box; }
@@ -114,6 +116,11 @@ svg { display: block; }
 .labels-btn { position: absolute; right: 12px; top: 12px; box-shadow: var(--shadow); background: var(--bg); font-weight: 700; font-size: 16px; }
 .labels-btn[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-fg); }
 .labels-btn[hidden] { display: none; }
+/* colour button (Auto / Light / Dark) under the Aa button; one icon per mode */
+.theme-btn { position: absolute; right: 12px; top: 64px; box-shadow: var(--shadow); background: var(--bg); }
+.theme-btn path { display: none; }
+.theme-btn[data-mode="auto"] .i-auto, .theme-btn[data-mode="light"] .i-light, .theme-btn[data-mode="dark"] .i-dark { display: inline; }
+.labels-btn[hidden] + .theme-btn { top: 12px; }
 .updated {
   position: absolute; left: 10px; bottom: calc(8px + var(--sheet-h, 0px)); margin: 0; font-size: 11px; color: var(--muted);
   background: color-mix(in srgb, var(--bg) 80%, transparent); padding: 2px 6px; border-radius: 6px; pointer-events: none;
@@ -125,7 +132,7 @@ svg { display: block; }
 .hl-halo { fill: none; stroke: #fff; stroke-width: 6; vector-effect: non-scaling-stroke; stroke-linejoin: round; pointer-events: none; }
 .hl { stroke-width: 3; vector-effect: non-scaling-stroke; stroke-linejoin: round; fill-opacity: .22; pointer-events: none; }
 .hl.over-full { fill-opacity: .1; }
-.hl.lighten { fill: #fff; fill-opacity: .45; }
+.hl.lighten { fill: #fff; fill-opacity: var(--lighten); }
 .hl.no-line { stroke: none; }
 /* the card's round icon: outline drawn around what it shows (1 s), stays 0.5 s, fades (0.5 s) */
 .trace-layer { pointer-events: none; }

@@ -28,6 +28,7 @@ Static files only: no server, no database, no login. Brief: [`venue-map-brief.md
 - **Colours** on the plan are muted. While something is selected, everything else turns grey (labels, pins, coloured areas) and only the selection keeps its colour; the plan's walls and outlines stay as they are. Add `&outline=1` to the URL to also draw an outline around selected areas (for comparison).
 - **Org fair**: the printed boxes only show while Org fair is selected. Of the three arrows from the *Organisations Fair* title only the middle one is shown (`hiddenArrows` in `scripts/import-config.json`).
 - **Labels**: with something selected, only its labels stay crisp and the rest fade. The **Aa** button (top right of the map) shows every label exactly as printed in the PDF; the choice is remembered on that phone.
+- **Colours**: the round button under **Aa** switches between *automatic* (half circle: light or dark like the phone), *light* (sun) and *dark* (moon). In dark the map itself is dark too: white paper turns dark grey, black walls and text turn light, the coloured areas keep their colours. Remembered on that phone.
 - **Zoom**: pinch, double-tap, mouse wheel; the corner button resets.
 - **Links for printed QR codes** (open a pre-filtered view):
   - `…/?floor=1&cat=toilets` (floor 1, toilets highlighted)
@@ -102,6 +103,7 @@ Files it writes:
 - `maps/<floor>.webp`: the plan picture with colours muted (walls untouched). Loaded first. (The grey copies used while something is selected are made by the browser from this file and the labels file; nothing extra to download.)
 - `maps/<floor>-labels.webp`: everything you drew in Canva (text, pins, arrows, boxes), on a transparent background, separated from the plan picture. Loaded first.
 - `maps/<floor>-full.webp`: the plan picture in full colour; only fetched when something on that floor is highlighted, and only shown inside the highlighted shapes.
+- `maps/<floor>-dark.webp`, `maps/<floor>-full-dark.webp`, `maps/<floor>-labels-dark.webp`: the same three for dark mode (only downloaded by phones in dark mode). How dark: `"dark"` in `scripts/import-config.json` (`floor` should match `--map-bg` in `style.css`).
 - Solid grey/white boxes drawn in Canva over the plan (e.g. hiding closed areas) are painted into the plan layers, so they are muted and dimmed with the plan and fading labels never reveals what they cover. Boxes that don't actually show in the PDF are ignored.
 - `source/raster/<floor>.png` + `source/raster/rasters.json`: high-res copies with pixel sizes, kept for the layout planner (not loaded by the page).
 - `import/overlay.generated.json`: raw import result.
@@ -127,7 +129,8 @@ For any other tool that wants to produce this map (the layout planner, a future 
    - `floor.chromeBoxes`: title/legend areas, faded unless *All labels* is on;
    - `item.labelsWhenSelected`: shapes in the label image shown only while that item (or its category) is selected (e.g. the Org fair boxes);
    - `floor.hiddenLabels`: shapes in the label image never shown, except with *All labels* (e.g. unwanted arrows);
-   - `floor.fixedBoxes`: areas of the label image that are always fully shown.
+   - `floor.fixedBoxes`: areas of the label image that are always fully shown;
+   - `floor.dark`: `{background, backgroundHighlight, labels}` dark-mode versions of those pictures (same size); each missing one falls back to the light picture.
 9. **Any tool may regenerate `data/overlay.json` and `maps/` as long as `python3 scripts/validate.py` passes.**
 
 Icon names available: `toilet food pin stairs bolt booth flask door lift stage info coat firstaid quiet registration` (anything else shows a dot).
