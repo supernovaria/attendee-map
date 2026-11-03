@@ -2,7 +2,7 @@
 
 A phone-friendly page attendees open from a QR code. It shows the floor plans; tapping a category (Toilets, Food & snacks, Meeting points, …) dims everything else, and search jumps to a room or meeting point.
 
-Static files only: no server, no database, no login. Brief: [`venue-map-brief.md`](venue-map-brief.md).
+Static files only: no server, no database, no login. Brief: [`venue-map-brief.md`](venue-map-brief.md). How it's built and why (for whoever works on it next): [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 **Status (2 Nov 2026):** first working version, reviewed once. Decisions so far are recorded in `import/overlay.overrides.json` (`_decisions`). Hosting: GitHub Pages (repo public for now).
 
