@@ -4,7 +4,7 @@ A phone-friendly page attendees open from a QR code. It shows the floor plans; t
 
 Static files only: no server, no database, no login. Brief: [`venue-map-brief.md`](venue-map-brief.md). How it's built and why (for whoever works on it next): [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
-**Status (2 Nov 2026):** first working version, reviewed once. Decisions so far are recorded in `import/overlay.overrides.json` (`_decisions`). Hosting: GitHub Pages (repo public for now).
+**Status (3 Nov 2026):** first working version, reviewed once; Share tested on a phone. Decisions so far are recorded in `import/overlay.overrides.json` (`_decisions`). Hosting: GitHub Pages (repo public for now).
 
 ---
 
@@ -13,10 +13,12 @@ Static files only: no server, no database, no login. Brief: [`venue-map-brief.md
 - **Floors**: tabs at the top. A dot on a tab means the selected category exists on that floor (including the one you're on).
 - **Categories**: chips at the bottom. Tap = highlight, tap again = clear. Org fair and Project fair jump to their floor automatically.
 - **Room list**: open search without typing: all rooms, grouped by floor (coloured bar per floor), opened at the floor you're on.
-- **Search**: magnifier, top right. Finds names, codes (`C3`, `MP C3`), descriptions (`speaker` → Darwin). Accents and case don't matter. "All floors" (on by default) lists/searches the whole building, grouped by floor and opened at the floor you are on (it follows when you switch floors); untick it for this floor only. Typed results list this floor first. With a category selected (e.g. Meeting points), search opens showing just that category, grouped by floor; untick "Only Meeting points" to search everything. Enter opens the first result.
+- **Search**: magnifier, top right. Finds names, codes (`C3`, `MP C3`), descriptions (`speaker` → Darwin) and everyday words (`WC`, `elevator`, `coat`, `lunch`, `kids`; set as `aliases` on items and categories in the overrides). Accents and case don't matter. "All floors" (on by default) lists/searches the whole building, grouped by floor and opened at the floor you are on (it follows when you switch floors); untick it for this floor only. Typed results list this floor first. With a category selected (e.g. Meeting points), search opens showing just that category, grouped by floor; untick "Only Meeting points" to search everything. Enter opens the first result.
 - **Card** at the bottom floats over the map (opening/closing it never moves the map).
   - Tap its round icon to bring everything selected on this floor into view (zooms out only as far as needed), or to jump back to the selected item.
-  - On an item: **Share** (phones; *Copy link* on desktop) sends a link that opens the map on that spot, e.g. "meet me at C3". "All …" highlights the whole category.
+  - On an item: **Share** (phones; *Copy link* on desktop) sends a link that opens the map on that spot, e.g. "meet me at C3". "All …" highlights the whole category. Some items have extra buttons that open a web page (`links`), e.g. **Directions** on the Main entrance.
+  - Catering shows its meal times (the item's `description`).
+  - **How to get here from the … floor**: shown when you jumped to the item from another floor (search, a link) or when a "You are here" dot is on another floor. It shows the floor you come from with the lifts and stairs that go to the item's floor highlighted (with a "You are here" dot: only the nearest lift and the nearest stairs), says "Take the lift or the stairs up to the 2nd floor", and has a button to go there. If the stairs only go part of the way, it says where to change. Which floors a lift/staircase reaches is `connects` in the data (read from the "To floor …" notes and lift numbers in the PDF; 2nd-floor stairs set in the overrides).
   - Nothing of that category on this floor: the card says so in red, and the floors that have it are buttons.
 - Selecting a category while zoomed into a part of the floor where none of them are moves the map so they're in view.
 - **Tap a printed label** (e.g. *Nap Rooms*) to select that thing; tapping the *Organisations Fair* title selects the whole Org fair.
@@ -29,6 +31,7 @@ Static files only: no server, no database, no login. Brief: [`venue-map-brief.md
 - **Links for printed QR codes** (open a pre-filtered view):
   - `…/?floor=1&cat=toilets` (floor 1, toilets highlighted)
   - `…/?item=mp-c3` (jumps to meeting point C3)
+  - `…/?here=mp-c3` (**You are here**: for a QR code on a sign at that spot. Opens that floor zoomed in around a blue dot with a "You are here" tag; the tag disappears after 8 seconds so it doesn't hide printed labels, the dot stays while browsing. Selecting a category keeps the dot in view if it has to move the map. Any item id works; can be combined, e.g. `?here=mp-c3&cat=toilets`.)
   - The bare URL stays the main QR target.
   - Item ids are listed in `data/overlay.json` and in the review pictures (`import/review/*.jpg`). **Never rename an id that has been printed.**
 
@@ -115,7 +118,7 @@ For any other tool that wants to produce this map (the layout planner, a future 
 5. Floors, categories, labels, colours, icons and order all come from the data. Nothing venue-specific is in the code. A category whose items are all on one floor (or that sets `"floor"`) switches to that floor when selected.
 6. Ids are opaque, stable strings (they end up in printed QR codes).
 7. Shapes: `polygon` or `rect` only. Every item has a `pin` (the producer computes one if needed).
-8. Optional extras the viewer understands: `floor.shortName` (tab label), `floor.color` (bar in the room list), `item.shapes` (several areas for one item, e.g. four nap rooms), `floor.view` (`[x, y, w, h]` start view), `category.chip: false` (searchable, no chip), `item.description`.
+8. Optional extras the viewer understands: `floor.shortName` (tab label), `floor.color` (bar in the room list), `item.shapes` (several areas for one item, e.g. four nap rooms), `floor.view` (`[x, y, w, h]` start view), `category.chip: false` (searchable, no chip), `item.description`, `category.aliases` (extra search words for every item of the category, e.g. `WC`), `item.links` (`[{"label": "Directions", "url": "https://…"}]`: buttons on the item's card; https only), `item.connects` (stairs/lifts: ids of the other floors they go to; used by *How to get here*).
    Layers (all optional; without them the page dims the whole background instead):
    - `floor.backgroundHighlight`: full-colour image, shown only inside highlighted shapes (so `background` can be muted);
    - `floor.labels`: transparent image of printed labels drawn on top;
@@ -138,7 +141,7 @@ If the repo goes private later, Cloudflare Pages can deploy from a private repo 
 
 ## Known gaps
 
-- Room outlines exist for about half the rooms; the rest highlight as a pin. Fine for search; add a `rect`/`polygon` via overrides where it matters.
+- Every room has an outline except *Outside Area 1:1s* (highlights as a pin). Outlines can be added or corrected with a `rect`/`polygon` via overrides.
 - No offline mode (deliberately: a stale cached map is worse than a slow one).
 - English UI only (decided).
 - Stages are extracted but switched off (`categories` in the overrides to turn on).

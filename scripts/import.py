@@ -36,7 +36,7 @@ import pymupdf
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
-CFG = json.loads((ROOT / "scripts/import-config.json").read_text())
+CFG = json.loads((ROOT / "scripts/import-config.json").read_text(encoding="utf-8"))
 OUT_GEN = ROOT / "import/overlay.generated.json"
 OUT_OVR = ROOT / "import/overlay.overrides.json"
 OUT_REPORT = ROOT / "import/import-report.md"
@@ -788,6 +788,7 @@ def main():
                     lab = lift_label(page, reg, lines)
                     if lab:
                         it["description"] = f"Goes to floors {lab}"
+                        it["connects"] = sorted(set(re.findall(r"\d", lab)) - {fid})
                 items.append(it)
             st[key["name"]] = len(regs)
         for rgb, area in unkeyed_colours(plan, scale, CFG["rasterKey"] + CFG["ignoreRaster"], exclude):
@@ -876,6 +877,9 @@ def main():
                     best, bd = it, dd
             if best:
                 best.setdefault("labelBoxes", []).append(xywh(b["bbox"]))
+                # the floors it goes to ("To floors 1 & 3", "0, 1, 2") -> connects
+                dest = set(best.get("connects", [])) | set(re.findall(r"\d", b.get("text", "")))
+                best["connects"] = sorted(dest - {fid})
 
         # 6. layers: muted plan, full-colour plan, transparent Canva layer
         Image.fromarray(mute(B)).save(MAPS_DIR / f"{fid}.webp", "WEBP", quality=74, method=6)
@@ -908,12 +912,12 @@ def main():
         "items": items,
     }
     OUT_GEN.parent.mkdir(exist_ok=True)
-    OUT_GEN.write_text(json.dumps(generated, indent=1, ensure_ascii=False) + "\n")
-    (RASTER_DIR / "rasters.json").write_text(json.dumps(raster_meta, indent=1) + "\n")
+    OUT_GEN.write_text(json.dumps(generated, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    (RASTER_DIR / "rasters.json").write_text(json.dumps(raster_meta, indent=1) + "\n", encoding="utf-8")
 
     final, merge_notes = merge(generated)
     OUT_FINAL.parent.mkdir(exist_ok=True)
-    OUT_FINAL.write_text(json.dumps(final, indent=1, ensure_ascii=False) + "\n")
+    OUT_FINAL.write_text(json.dumps(final, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     for n in merge_notes:
         issue("overrides", n)
 
@@ -984,7 +988,7 @@ def shade_check(doc, cfg):
 # ---------------------------------------------------------------- overrides
 def merge(gen):
     """generated + import/overlay.overrides.json -> final overlay."""
-    ovr = json.loads(OUT_OVR.read_text()) if OUT_OVR.exists() else {}
+    ovr = json.loads(OUT_OVR.read_text(encoding="utf-8")) if OUT_OVR.exists() else {}
     notes = []
     out = json.loads(json.dumps(gen))
     out.pop("source", None)
@@ -1105,7 +1109,7 @@ def write_report(stats, gen, final):
     L += ["", "## How to fix things", "",
           "Edit `import/overlay.overrides.json` (never `data/overlay.json` directly), then re-run `python3 scripts/import.py`. "
           "See the README section *Correcting the map*.", ""]
-    OUT_REPORT.write_text("\n".join(L))
+    OUT_REPORT.write_text("\n".join(L), encoding="utf-8")
 
 
 if __name__ == "__main__":

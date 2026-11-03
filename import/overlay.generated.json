@@ -1,6 +1,6 @@
 {
  "schemaVersion": 1,
- "updated": "2026-11-03T00:25:37+01:00",
+ "updated": "2026-11-03T22:33:38+01:00",
  "source": "import:source/attendee-map.pdf",
  "floors": [
   {
@@ -863,6 +863,9 @@
      31.0,
      25.7
     ]
+   ],
+   "connects": [
+    "1"
    ]
   },
   {
@@ -989,6 +992,9 @@
      50.6,
      29.9
     ]
+   ],
+   "connects": [
+    "1"
    ]
   },
   {
@@ -1205,6 +1211,11 @@
     348.8
    ],
    "description": "Goes to floors 1, 2, 3",
+   "connects": [
+    "1",
+    "2",
+    "3"
+   ],
    "labelBoxes": [
     [
      660.4,
@@ -1245,6 +1256,9 @@
     683.2
    ],
    "description": "Goes to floors 1",
+   "connects": [
+    "1"
+   ],
    "labelBoxes": [
     [
      394.6,
@@ -2085,6 +2099,9 @@
      46.7,
      15.1
     ]
+   ],
+   "connects": [
+    "0"
    ]
   },
   {
@@ -2140,6 +2157,10 @@
      17.9,
      15.1
     ]
+   ],
+   "connects": [
+    "2",
+    "3"
    ]
   },
   {
@@ -2210,7 +2231,8 @@
      50.6,
      30.0
     ]
-   ]
+   ],
+   "connects": []
   },
   {
    "id": "toilets-1",
@@ -2625,6 +2647,11 @@
     355.5
    ],
    "description": "Goes to floors 0, 2, 3",
+   "connects": [
+    "0",
+    "2",
+    "3"
+   ],
    "labelBoxes": [
     [
      659.7,
@@ -2665,6 +2692,9 @@
     680.1
    ],
    "description": "Goes to floors 0",
+   "connects": [
+    "0"
+   ],
    "labelBoxes": [
     [
      400.9,
@@ -4548,6 +4578,10 @@
      42.5,
      23.8
     ]
+   ],
+   "connects": [
+    "1",
+    "2"
    ]
   },
   {
@@ -4950,6 +4984,11 @@
     482.5
    ],
    "description": "Goes to floors 0, 1, 2",
+   "connects": [
+    "0",
+    "1",
+    "2"
+   ],
    "labelBoxes": [
     [
      511.9,
@@ -5075,6 +5114,9 @@
      37.5,
      27.5
     ]
+   ],
+   "connects": [
+    "2"
    ]
   },
   {

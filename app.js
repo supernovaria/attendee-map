@@ -114,7 +114,7 @@
       it._area = it._polys.reduce((a, p) => a + polyArea(p), 0);
       const cat = S.catById[it.category];
       it._name = norm(it.name);
-      it._hay = norm([it.name, ...(it.aliases || []), it.description, cat.label].join(' '));
+      it._hay = norm([it.name, ...(it.aliases || []), it.description, cat.label, ...(cat.aliases || [])].join(' '));
       it._compact = it._hay.replace(/ /g, '');
     });
     if (!S.floors.length) { $('loading').textContent = 'The map has no floors yet.'; return; }
@@ -126,16 +126,27 @@
     bindMap();
     bindSearch();
 
-    // deep links: ?item=  or  ?floor= & cat=
+    // deep links: ?item=  or  ?floor= & cat=, plus ?here= (QR code on a sign:
+    // "You are here" at that item's spot, kept while browsing)
     const q = new URLSearchParams(location.search);
     const item = S.itemById[q.get('item')];
     const floor = S.floorById[q.get('floor')];
     const cat = S.catById[q.get('cat')];
-    setFloor((item && item.floor) || (floor && floor.id) || S.floors[0].id, { noUrl: true });
+    S.here = S.itemById[q.get('here')] || null;
+    S.hereAt = performance.now();
+    if (S.here) setTimeout(placeMarkers, HERE_TAG_MS + 50);
+    setFloor((item && item.floor) || (floor && floor.id) || (S.here && S.here.floor) || S.floors[0].id, { noUrl: true });
     if (item) selectItem(item.id, { noUrl: true, instant: true });
     else if (cat) selectCat(cat.id, { noUrl: true, keepFloor: !!floor });
+    else if (S.here) {
+      const [cw, ch] = size(), k = S.fitK * 1.6;
+      setView({ k, x: cw / 2 - k * S.here.pin[0], y: ch / 2 - k * S.here.pin[1] }, true);
+    }
     S.ready = true;
   }
+  const HERE_TAG_MS = 8000;
+  // the items plus the "You are here" spot when it is on this floor
+  const withHere = (items) => (S.here && S.here.floor === S.floor && !items.includes(S.here) ? [...items, S.here] : items);
 
   function showUpdated(iso) {
     const d = new Date(iso);
@@ -252,7 +263,7 @@
       b.innerHTML = `<span>${esc(f.shortName || f.name)}</span>`;
       if (f.color) b.style.setProperty('--fc', f.color);
       // tapping the floor you're on again = show the whole floor
-      b.addEventListener('click', () => (f.id === S.floor ? fit(false) : setFloor(f.id)));
+      b.addEventListener('click', () => { if (f.id === S.floor) fit(false); else { S.cameFrom = null; setFloor(f.id); } });
       nav.appendChild(b);
     }
   }
@@ -276,6 +287,8 @@
       m.setAttribute('x', 0); m.setAttribute('y', 0); m.setAttribute('width', f.width); m.setAttribute('height', f.height);
     }
     if (changed || opts.refit) fit(true);
+    // back on the "You are here" floor: show the tag again for a moment
+    if (changed && S.ready && S.here && S.here.floor === id) { S.hereAt = performance.now(); setTimeout(placeMarkers, HERE_TAG_MS + 50); }
     render(opts);
   }
 
@@ -423,10 +436,12 @@
     document.querySelectorAll('.chip').forEach((b) => b.setAttribute('aria-pressed', b.dataset.cat === S.cat));
 
     // which items are emphasised
+    if (S.way && S.floor !== S.way.from) S.way = null; // went to another floor: the way hint is done
     let hl = [];
     if (S.item) hl = [S.itemById[S.item]];
+    else if (S.way) hl = [...S.way.lifts, ...S.way.stairs];
     else if (cat) hl = S.items.filter((i) => i.category === cat.id && i.floor === f.id);
-    const dimOn = !!(S.item || cat);
+    const dimOn = !!(S.item || cat || S.way);
     const layered = !!f.backgroundHighlight;
     dimRect.style.opacity = dimOn ? 1 : 0;
     dimRect.classList.toggle('light', layered);
@@ -511,8 +526,22 @@
 
   function placeMarkers() {
     markerLayer.innerHTML = '';
-    if (!S.hl) return;
     const { k, x, y } = S.view;
+    if (S.here && S.here.floor === S.floor) {
+      // "You are here": blue dot with a label, always on top of the plan
+      const g = el('g', { class: 'here', transform: `translate(${x + k * S.here.pin[0]} ${y + k * S.here.pin[1]})` }, markerLayer);
+      el('circle', { class: 'here-halo', r: 16 }, g);
+      el('circle', { class: 'here-dot', r: 8 }, g);
+      // the tag only for the first seconds: after that it would hide printed labels
+      if (performance.now() - S.hereAt < HERE_TAG_MS) {
+        // keep the tag on screen when the dot is near an edge
+        const sx = x + k * S.here.pin[0], cw = size()[0];
+        const dx = Math.min(Math.max(sx, 48), cw - 48) - sx;
+        el('rect', { class: 'here-tag', x: dx - 44, y: 14, width: 88, height: 22, rx: 11 }, g);
+        el('text', { class: 'here-text', x: dx, y: 25.5 }, g).textContent = 'You are here';
+      }
+    }
+    if (!S.hl) return;
     for (const it of S.hl) {
       // printed pins/labels already show where things are; a marker only for
       // the searched/tapped item, or things with nothing printed on the plan
@@ -536,12 +565,31 @@
     const close = `<button class="icon-btn close" aria-label="Clear"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg></button>`;
     const floorLinks = (ids) => S.floors.filter((f) => ids.has(f.id) && f.id !== S.floor)
       .map((f) => `<button data-goto="${esc(f.id)}">${esc(f.name)}</button>`).join('');
-    if (S.item) {
+    if (!S.item && S.way) {
+      const w = S.way, it = S.itemById[w.item], tf = S.floorById[w.to];
+      const ff = S.floorById[w.from];
+      const dir = (tf.order ?? 0) > (ff.order ?? 0) ? 'up' : 'down';
+      const opt = (arr, cid, one) => (arr.length ? `<b style="color:${esc(S.catById[cid]?.color || 'inherit')}">${one}</b>` : '');
+      const via = w.via ? ` (they go to the ${esc(S.floorById[w.via].name)}: change there)` : '';
+      const parts = [opt(w.lifts, 'lifts', 'lift'), opt(w.stairs, 'stairs', 'stairs') + via].filter(Boolean);
+      const txt = parts.length
+        ? `Take the ${parts.join(' or the ')} ${dir} to the ${esc(tf.name)}.`
+        : `No lift or stairs on this floor are marked as going to the ${esc(tf.name)}. Ask at the Info Desk.`;
+      sh.innerHTML = `<div class="grow"><div class="name">To ${esc(it.name)}</div><div class="sub">${txt}</div>` +
+        `<div class="links strong"><button data-goitem="${esc(it.id)}">Go to the ${esc(tf.name)}</button></div></div>${close}`;
+    } else if (S.item) {
       const it = S.itemById[S.item], c = S.catById[it.category];
       const n = S.items.filter((i) => i.category === c.id).length;
       const allBtn = c.chip !== false && n > 1 ? `<button data-cat="${esc(c.id)}">All ${esc(c.label)} (${n})</button>` : '';
       const share = `<button data-share="1">${navigator.share ? 'Share' : 'Copy link'}</button>`;
-      const links = `<div class="links">${share}${allBtn}</div>`;
+      // item.links: buttons that open a web page (e.g. directions to the entrance)
+      const ext = (Array.isArray(it.links) ? it.links : []).filter((l) => l && l.label && /^https:\/\//.test(l.url))
+        .map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('');
+      // came from another floor (search, link, or the "You are here" floor): offer the way there
+      const from = S.here ? S.here.floor : S.cameFrom;
+      const way = from && from !== it.floor && S.floorById[from]
+        ? `<button data-way="${esc(from)}">How to get here from the ${esc(S.floorById[from].name)}</button>` : '';
+      const links = `<div class="links">${way}${ext}${share}${allBtn}</div>`;
       sh.innerHTML = `${dotBtn(c, 'Show it on the map')}<div class="grow"><div class="name">${esc(it.name)}</div>` +
         `<div class="sub">${esc([it.description, c.label, S.floorById[it.floor].name].filter(Boolean).join(' · '))}</div>${links}</div>${close}`;
     } else if (cat) {
@@ -558,13 +606,15 @@
       return;
     }
     sh.hidden = false;
-    sh.querySelector('.close').onclick = () => { S.item = null; S.cat = null; render(); };
+    sh.querySelector('.close').onclick = () => { S.item = null; S.cat = null; S.way = null; render(); };
+    sh.querySelectorAll('[data-way]').forEach((b) => (b.onclick = () => showWay(S.item, b.dataset.way)));
+    sh.querySelectorAll('[data-goitem]').forEach((b) => (b.onclick = () => { const from = S.floor; S.way = null; selectItem(b.dataset.goitem); S.cameFrom = from; render(); }));
     sh.querySelectorAll('[data-goto]').forEach((b) => (b.onclick = () => setFloor(b.dataset.goto)));
     sh.querySelectorAll('[data-cat]').forEach((b) => (b.onclick = () => selectCat(b.dataset.cat, { force: true, keepFloor: true })));
     const dot = sh.querySelector('.dot-btn');
     if (dot) dot.onclick = () => {
       if (S.item) { S.pulseAt = performance.now(); centreOn(S.itemById[S.item]); setTimeout(placeMarkers, 3600); }
-      else showItems(S.hl);
+      else showItems(withHere(S.hl));
     };
     const shareBtn = sh.querySelector('[data-share]');
     if (shareBtn) shareBtn.onclick = () => shareItem(S.itemById[S.item]);
@@ -609,9 +659,46 @@
     }
   }
 
+  // "How to get here": on the floor you come from, highlight the lifts and
+  // stairs that go to the item's floor (item.connects); with a "You are here"
+  // dot on that floor, only the nearest lift and the nearest stairs.
+  function wayFrom(from, to) {
+    const order = (fid) => S.floorById[fid].order ?? 0;
+    const on = (cid) => S.items.filter((i) => i.floor === from && i.category === cid && Array.isArray(i.connects));
+    const direct = (cid) => on(cid).filter((i) => i.connects.includes(to));
+    let lifts = direct('lifts'), stairs = direct('stairs'), via = null;
+    if (!stairs.length) {
+      // stairs that go part of the way: change floors on the way
+      const up = order(to) > order(from);
+      const toward = (fid) => (up ? order(fid) > order(from) && order(fid) < order(to) : order(fid) < order(from) && order(fid) > order(to));
+      // only the ones that get closest, e.g. not the spiral stairs that stop a floor earlier
+      const best = (i) => i.connects.filter((fid) => S.floorById[fid] && toward(fid)).sort((a, b) => Math.abs(order(to) - order(a)) - Math.abs(order(to) - order(b)))[0];
+      const part = on('stairs').filter((i) => best(i) !== undefined);
+      if (part.length) {
+        via = part.map(best).sort((a, b) => Math.abs(order(to) - order(a)) - Math.abs(order(to) - order(b)))[0];
+        stairs = part.filter((i) => best(i) === via);
+      }
+    }
+    if (S.here && S.here.floor === from) {
+      const near = (arr) => arr.length ? [arr.reduce((a, b) => (dist(a) <= dist(b) ? a : b))] : [];
+      const dist = (i) => Math.hypot(i.pin[0] - S.here.pin[0], i.pin[1] - S.here.pin[1]);
+      lifts = near(lifts); stairs = near(stairs);
+    }
+    return { lifts, stairs, via };
+  }
+  function showWay(itemId, from) {
+    const it = S.itemById[itemId];
+    if (!it || !S.floorById[from]) return;
+    S.way = { item: it.id, from, to: it.floor, ...wayFrom(from, it.floor) };
+    S.item = null; S.cat = null;
+    if (S.floor !== from) setFloor(from); else render();
+    requestAnimationFrame(() => { if (S.way && S.hl.length) showItems(withHere(S.hl)); });
+  }
+
   function selectCat(id, opts = {}) {
     if (S.cat === id && !opts.force) { S.cat = null; render(opts); return; }
     S.cat = id;
+    S.way = null;
     S.item = null;
     const c = S.catById[id];
     const floors = [...new Set(S.items.filter((i) => i.category === id).map((i) => i.floor))];
@@ -624,7 +711,7 @@
       render(opts);
       if (S.ready) {
         // none of them on screen (zoomed into another corner): bring them in
-        if (S.hl.length && !countVisible(S.hl)) requestAnimationFrame(() => showItems(S.hl));
+        if (S.hl.length && !countVisible(S.hl)) requestAnimationFrame(() => showItems(withHere(S.hl)));
       }
     }
     const chip = document.querySelector(`.chip[data-cat="${CSS.escape(id)}"]`);
@@ -635,8 +722,10 @@
     const it = S.itemById[id];
     if (!it) return;
     S.cat = null;
+    S.way = null;
     S.item = id;
     S.pulseAt = performance.now();
+    S.cameFrom = it.floor !== S.floor && S.ready ? S.floor : null;
     if (it.floor !== S.floor) {
       setFloor(it.floor, { noUrl: true });
       if (S.ready) toast(`Switched to the ${S.floorById[it.floor].name}`);
@@ -657,6 +746,7 @@
       if (S.floor !== S.floors[0].id) p.set('floor', S.floor);
       if (S.cat) p.set('cat', S.cat);
     }
+    if (S.here) p.set('here', S.here.id);
     if (OUTLINE) p.set('outline', '1');
     const qs = p.toString();
     history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
@@ -789,7 +879,7 @@
       best = inside[0] || null;
     }
     if (best) {
-      S.item = best.id; S.pulseAt = 0; render();
+      S.item = best.id; S.way = null; S.pulseAt = 0; render();
     } else if (S.item) {
       S.item = null; render();
     }

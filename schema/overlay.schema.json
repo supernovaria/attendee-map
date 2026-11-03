@@ -134,6 +134,13 @@
           "chip": {
             "type": "boolean",
             "description": "false = no chip in the category bar (still searchable)."
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional. Extra search words for every item of this category (e.g. 'WC', 'elevator')."
           }
         }
       }
@@ -198,6 +205,34 @@
               "$ref": "#/$defs/shape"
             },
             "description": "Areas of the labels image shown only while this item (or its category) is highlighted, e.g. a printed box around a fair area."
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "label",
+                "url"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "url": {
+                  "type": "string",
+                  "pattern": "^https://"
+                }
+              }
+            },
+            "description": "Optional. Buttons on the item's card that open a web page (e.g. directions to the entrance)."
+          },
+          "connects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional, for stairs and lifts: ids of the other floors it goes to. Used by 'How to get here' to pick the right ones."
           }
         }
       }

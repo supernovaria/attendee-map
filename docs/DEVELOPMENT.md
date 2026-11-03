@@ -2,7 +2,7 @@
 
 For whoever works on this next: a person, or a future Claude session. It explains how the pieces fit together, why things are the way they are, and the traps already found. The user-facing guide (how to use it, how to update the map, the data contract) is [`README.md`](../README.md); the original brief is [`venue-map-brief.md`](../venue-map-brief.md). Don't repeat README content here; update both when behaviour changes.
 
-Status as of 3 Nov 2026: first version live on GitHub Pages (`https://supernovaria.github.io/attendee-map/`), deployed from `main`, root folder. Built for EAGxBerlin 2026 at Urania Berlin. Production lead and owner: the repo owner (supernovaria).
+Status as of 3 Nov 2026 (evening): first version live on GitHub Pages (`https://supernovaria.github.io/attendee-map/`), deployed from `main`, root folder. Built for EAGxBerlin 2026 at Urania Berlin. Production lead and owner: the repo owner (supernovaria).
 
 ---
 
@@ -85,7 +85,7 @@ Format is in the README. Rules of thumb:
 
 ### State and flow
 
-One state object `S` (floor, category `cat`, `item`, view `{k, x, y}`, `allLabels`, `allFloors`, …). Everything goes through `render()`, which redraws highlights, masks, the floor tabs, chips and the bottom card, and updates the URL (`history.replaceState`; `?floor=&cat=` or `?item=`; `?outline=1` is kept). Entry points: `setFloor`, `selectCat`, `selectItem`, `tap`.
+One state object `S` (floor, category `cat`, `item`, view `{k, x, y}`, `allLabels`, `allFloors`, `here`, …). Everything goes through `render()`, which redraws highlights, masks, the floor tabs, chips and the bottom card, and updates the URL (`history.replaceState`; `?floor=&cat=` or `?item=`; `?here=` and `?outline=1` are kept). Entry points: `setFloor`, `selectCat`, `selectItem`, `tap`.
 
 ### SVG layers (bottom to top), all inside one transformed `<g>` (`vp`)
 
@@ -95,7 +95,7 @@ One state object `S` (floor, category `cat`, `item`, view `{k, x, y}`, `allLabel
 4. `dimRect`: light veil with a hole (`#hole` mask) for the selection.
 5. `hlLayer`: highlight tint. No outline unless `?outline=1` or the floor has no full-colour layer. Dark category colours (rooms) get a white tint instead (`isDark` → `.lighten`).
 6. `labelGreyLayer` (mask `#labg`) + `labelLayer` (mask `#lab`): the Canva layer twice. While selecting, the grey copy shows everything faded and the colour copy shows only the selected items' `labelBoxes` / `labelsWhenSelected`. `chromeBoxes` (title, legend) are faded. `hiddenLabels` and other items' `labelsWhenSelected` are masked out. "Aa" (`allLabels`) shows the colour layer unmasked, exactly as printed.
-7. `markerLayer`: screen-space, outside `vp`, so markers keep their size. Markers are drawn only for the searched/tapped item or things with nothing printed.
+7. `markerLayer`: screen-space, outside `vp`, so markers keep their size. Markers are drawn only for the searched/tapped item or things with nothing printed. The "You are here" dot (`?here=<item id>`, for QR codes on signs) is drawn here too, at that item's pin; its text tag shows for `HERE_TAG_MS` after load and after returning to its floor, then only the dot (the tag would cover printed labels). `withHere()` adds it to `showItems` so a category jump keeps it in view.
 
 **Grey copies are made in the browser** (`greyed()`: canvas → desaturate → blob URL) once per floor, during idle time, so there is nothing extra to download. Until they're ready the old fading is used. Images created before they've loaded are kept hidden (an earlier bug showed one floor's grey copy on another floor).
 
@@ -114,9 +114,16 @@ White = shown, black = hidden, grey = partly. Order of drawing inside `renderLab
 
 Pins within 22 px, then printed labels (`labelBoxes` up to 4000 pt²; a label shared by several items of one category selects the category, e.g. the Org fair title), then the smallest shape containing the point.
 
+### How to get here
+
+- `S.cameFrom` = the floor you were on when `selectItem` switched floors (cleared by tapping a floor tab). The "from" floor is the `?here=` dot's floor if there is one, else `cameFrom`.
+- `wayFrom(from, to)`: lifts and stairs on `from` whose `connects` include `to`. No direct stairs: the stairs that get closest in the right direction, and `via` = the floor to change at. With a here-dot on `from`: only the nearest of each.
+- `S.way` is a third selection mode next to `item` and `cat` (render: `item` > `way` > `cat`); it ends when you leave its floor. Not in the URL.
+- `connects` comes from the import (lift digits and "To floor …" notes, step 5); 2nd-floor stairs are overrides (their labels are hidden text), matched by position with the floors above and below. Stairs without `connects` are never suggested.
+
 ### Search
 
-- `search()` normalises accents and case and matches tokens or a compact form ("mpc3"). Ranking: name prefix > name contains > other, this floor first.
+- `search()` normalises accents and case and matches tokens or a compact form ("mpc3") against name, item aliases, description, category label and category aliases. Ranking: name prefix > name contains > other, this floor first.
 - An empty query lists rooms, or the selected category when **Only <category>** is ticked, grouped by floor with sticky headings in the floor colour.
 - **All floors** is on by default; unticked it limits the list to the current floor.
 - `scrollToFloor` resets `scrollTop` to 0 before measuring, because sticky headings report their *stuck* `offsetTop`. It runs on open (and again in a rAF, since some browsers restore the old scroll) and when the floor changes with the panel open.
@@ -134,19 +141,22 @@ Pins within 22 px, then printed labels (`labelBoxes` up to 4000 pt²; a label sh
 - "No X on this floor": red text on the card only. A centre-screen message was tried and judged too much. The "Switched to …" message for automatic floor changes stays.
 - Floor colours (room list bars, tab hairline): ground red `#D7263D`, 1st grey `#8A8F98`, 2nd green `#2E9E4F`, 3rd black `#111111` (lightened in dark mode).
 - No offline mode on purpose: a stale cached map is worse than a slow one.
+- 3 Nov: everyday search words live in the overrides (`aliases` on categories and items), not in code. Meal times are the catering items' `description`. A start view zoomed to the building (`floor.view`) was considered and dropped: on a portrait phone the building already fills the width, the empty space is the title/legend above and below.
+- 3 Nov: "How to get here" highlights lifts and stairs on the floor you come from rather than drawing a route: the plan has no walkable paths, and the stair/lift choice is what people actually get wrong.
+- 3 Nov: the museum exhibition gets its own category chip (Canva PDF with its label to come).
 
 ## 5. Known gaps / ideas not done
 
-- About half the rooms have no outline (pin only). Add `rect`/`polygon` shapes via overrides where it matters.
+- Every room has an outline except Outside Area 1:1s (no edge on the plan; the paved strip by Point D4 could be outlined if that's the area). Eight outlines were traced by hand from the plan (3 Nov, `_why` in the overrides); still to confirm on site: where Arnheim-Foyer ends near the entrance, that the registration/wardrobe room is the tan strip + grey room, and that the 3rd-floor Foyer/Voltaire split is the pillar row.
 - Still to verify on site: charging station position, the long arrows to D3 and C5, the 2nd-floor lift's floor list ("Goes to floors 0, 1, 3" is an override).
 - Some arrows (e.g. D3's long arrow) aren't linked to their item, so they stay faded when it's selected. Fix by adding a `labelBoxes` entry via overrides.
 - Toilets in the Nap Rooms wing aren't coloured on the plan, so they aren't in Toilets.
-- The Share button has only been tested as "Copy link" on desktop, not on a phone.
 
 ## 6. Working on it
 
+- **Windows:** the command is `python`, not `python3`. The scripts read/write files as UTF-8 explicitly (Windows would otherwise use cp1252 and garble `·` and `–`). Re-running the import on another machine/library version may re-encode `source/raster/*.png` and `import/review/*.jpg` with different bytes but the same picture; don't commit those if nothing else changed.
 - **Local preview:** `python3 -m http.server 8000` in the repo root, open `http://localhost:8000/`. Hard-reload after changes (images and `app.js` are cached).
-- **Check in a phone-sized browser:** Playwright with `viewport: {width: 390, height: 780}`, `isMobile: true, hasTouch: true`. Screenshot `?floor=…&cat=…` and `?item=…` states. Also check dark mode (`colorScheme: 'dark'`).
+- **Check in a phone-sized browser:** Playwright (on this Windows PC: `pip install playwright`, then `chromium.launch(channel="msedge")` uses the installed Edge, no browser download) with `viewport: {width: 390, height: 780}`, `isMobile: true, hasTouch: true`. Screenshot `?floor=…&cat=…` and `?item=…` states. Also check dark mode (`colorScheme: 'dark'`).
 - **Before committing:** `node --check app.js`; `python3 scripts/validate.py`; if the import changed, look at `import/review/*.jpg` and the report.
 - **Data contract changes:** update `schema/overlay.schema.json`, `scripts/validate.py` (if it needs a cross-check), the README "Data contract" section, and this file. New fields must be optional; the viewer must work without them.
 - **Never rename an item id** that may be printed in a QR code (`?item=…`).

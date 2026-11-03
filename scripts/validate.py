@@ -27,7 +27,7 @@ def main() -> int:
 
     try:
         import jsonschema
-        schema = json.loads((ROOT / "schema/overlay.schema.json").read_text())
+        schema = json.loads((ROOT / "schema/overlay.schema.json").read_text(encoding="utf-8"))
         v = jsonschema.Draft202012Validator(schema)
         for e in sorted(v.iter_errors(data), key=lambda e: list(e.path)):
             errors.append(f"schema: {'/'.join(map(str, e.path)) or '(root)'}: {e.message}")
