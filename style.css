@@ -13,7 +13,9 @@
   --map-bg: #ffffff;
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
   --map-filter: none;
-  --lighten: 0.45; /* white tint on rooms (dark category colours) */
+  --lighten: 0.45; /* white tint on rooms (dark category colours), only where blending isn't supported */
+  --room-tint: #d2ebff; /* highlighter on rooms: multiplied, so floor turns pale blue and lines stay dark */
+  --room-blend: multiply;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -31,12 +33,15 @@
     --shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
     --map-filter: none; /* the map has its own dark pictures */
     --lighten: 0.14;
+    --room-tint: #1f3a52; /* screen: the dark floor lifts to blue-grey, the light lines stay light */
+    --room-blend: screen;
   }
 }
 :root[data-theme="dark"] {
   --bg: #16181d; --fg: #eef0f4; --muted: #a3a9b6; --line: #2c3038; --chip: #23262d;
   --chip-on: #eef0f4; --chip-on-fg: #16181d; --warn: #FF8080; --dim: rgba(10, 12, 16, 0.66); --dim-light: rgba(10, 12, 16, 0.16); --map-bg: #1e2127;
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.5); --map-filter: none; --lighten: 0.14;
+  --room-tint: #1f3a52; --room-blend: screen;
 }
 
 * { box-sizing: border-box; }
@@ -133,16 +138,20 @@ svg { display: block; }
 .hl { stroke-width: 3; vector-effect: non-scaling-stroke; stroke-linejoin: round; fill-opacity: .22; pointer-events: none; }
 .hl.over-full { fill-opacity: .1; }
 .hl.lighten { fill: #fff; fill-opacity: var(--lighten); }
+/* rooms: a highlighter, not a veil. Blending keeps walls, doors and text at full contrast. */
+@supports (mix-blend-mode: multiply) {
+  .hl.lighten { fill: var(--room-tint); fill-opacity: 1; mix-blend-mode: var(--room-blend); }
+}
 .hl.no-line { stroke: none; }
 /* the card's round icon: outline drawn around what it shows (1 s), stays 0.5 s, fades (0.5 s) */
 .trace-layer { pointer-events: none; }
+/* no vector-effect here: it breaks the dash (see traceOutlines in app.js); width is set per zoom there */
 .trace, .trace-halo {
-  fill: none; vector-effect: non-scaling-stroke; stroke-linejoin: round; stroke-linecap: round;
+  fill: none; stroke-linejoin: round; stroke-linecap: round;
   stroke-dasharray: 1 1; stroke-dashoffset: 1;
   animation: trace-draw 1s ease-in-out forwards, trace-fade .5s ease-in 1.5s forwards;
 }
-.trace { stroke-width: 4; }
-.trace-halo { stroke: #fff; stroke-width: 8; opacity: .9; }
+.trace-halo { stroke: #fff; opacity: .9; }
 @keyframes trace-draw { to { stroke-dashoffset: 0; } }
 @keyframes trace-fade { to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {

@@ -355,40 +355,6 @@ def leader_targets(layer, scale, label_bbox, text_boxes):
     return uniq
 
 
-def room_near(plan, pt, scale, page_area_pt2, DOOR=5, radius=15, _cache={}):
-    """The indoor room closest to `pt` (e.g. where a leader line ends on a
-    window). Outdoor space (touching the page edge) and huge areas are skipped."""
-    key = (id(plan), DOOR)
-    if key not in _cache:
-        _cache.clear()
-        free = (plan.min(2) > 225).astype(np.uint8)
-        r = int(DOOR * scale)
-        ker = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))
-        n, lab, stats, _ = cv2.connectedComponentsWithStats(cv2.erode(free, ker), 4)
-        Hh, Ww = lab.shape
-        ok = np.zeros(n, bool)
-        for i in range(1, n):
-            x, y, w, h, area = stats[i]
-            grown = area / scale / scale  # rough; checked again below
-            ok[i] = not (x <= r + 2 or y <= r + 2 or x + w >= Ww - r - 2 or y + h >= Hh - r - 2) and grown < 0.05 * page_area_pt2
-        _cache[key] = (free, ker, lab, ok)
-    free, ker, lab, ok = _cache[key]
-    R = int(radius * scale)
-    px, py = int(pt[0] * scale), int(pt[1] * scale)
-    y0, x0 = max(0, py - R), max(0, px - R)
-    win = lab[y0:py + R, x0:px + R]
-    ys, xs = np.nonzero(ok[win])
-    if not len(ys):
-        return None
-    j = np.argmin((ys + y0 - py) ** 2 + (xs + x0 - px) ** 2)
-    i = win[ys[j], xs[j]]
-    m = cv2.dilate((lab == i).astype(np.uint8), ker) & free
-    if m.sum() / scale / scale < 150:
-        return None
-    cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    return contour_to_poly(max(cnts, key=cv2.contourArea), scale, 1.5)
-
-
 def behind_wall(plan, scale, start, direction, max_pt=80):
     """Walk from `start` along `direction` until a wall has been crossed;
     return the first open-floor point behind it (where a leader line points)."""
@@ -552,35 +518,232 @@ def plan_canvas(doc, page, scale):
     return cv2.warpAffine(src, M, (W, H), flags=cv2.INTER_AREA, borderValue=(255, 255, 255))
 
 
-def room_shape(plan, seed_pt, scale, page_area_pt2, DOOR=13):
-    """Fill the white room around a label. Doorways are closed first by
-    shrinking free space by DOOR pt (13 closes openings up to ~26 pt, i.e.
-    double doors), then the found room is grown back."""
-    free = (plan.min(2) > 225).astype(np.uint8)
-    r = int(DOOR * scale)
-    ker = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))
-    core = cv2.erode(free, ker)
-    n, lab, stats, _ = cv2.connectedComponentsWithStats(core, 4)
-    sx, sy = int(seed_pt[0] * scale), int(seed_pt[1] * scale)
-    R = int(min(25, DOOR * 2) * scale)
-    win = lab[max(0, sy - R):sy + R, max(0, sx - R):sx + R]
+# ---------------------------------------------------------------- room outlines
+def _disk(r):
+    return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))
+
+
+def square_morph(mask, r, angle=0.0, op=cv2.MORPH_OPEN):
+    """Opening (or closing) by a square of side 2r+1 turned by `angle` degrees.
+    Opening keeps every part of `mask` such a square fits in: square corners
+    stay square, openings narrower than the square are cut along the wall."""
+    k = np.ones((2 * r + 1, 2 * r + 1), np.uint8)
+    if abs(angle) < 1:
+        return cv2.morphologyEx(mask, op, k)
+    h, w = mask.shape
+    M = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1)
+    c, s = abs(M[0, 0]), abs(M[0, 1])
+    nw, nh = int(h * s + w * c) + 2, int(h * c + w * s) + 2
+    M[0, 2] += nw / 2 - w / 2
+    M[1, 2] += nh / 2 - h / 2
+    rot = cv2.warpAffine(mask, M, (nw, nh), flags=cv2.INTER_NEAREST, borderValue=0)
+    back = cv2.warpAffine(cv2.morphologyEx(rot, op, k), cv2.invertAffineTransform(M), (w, h),
+                          flags=cv2.INTER_NEAREST, borderValue=0)
+    return back & mask if op == cv2.MORPH_OPEN else back | mask
+
+
+def wall_angles(walls, scale, n=2):
+    """Up to n main directions of the straight wall edges in a wall mask
+    (degrees, -45..45, 0 = upright), strongest first."""
+    cnts, _ = cv2.findContours(walls.astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    angs, lens = [], []
+    for c in cnts:
+        p = cv2.approxPolyDP(c, 1.0 * scale, True)[:, 0, :].astype(float)
+        d = np.roll(p, -1, 0) - p
+        L = np.hypot(d[:, 0], d[:, 1])
+        k = L > 12 * scale
+        angs += list(np.degrees(np.arctan2(d[k, 1], d[k, 0])) % 90)
+        lens += list(L[k])
+    angs, lens = np.array(angs), np.array(lens)
+    out, top = [], 0
+    while len(angs) and len(out) < n:
+        h, _ = np.histogram(angs, bins=90, range=(0, 90), weights=lens)
+        h = h + np.roll(h, 1) + np.roll(h, -1)
+        best = int(np.argmax(h))
+        if out and h[best] < 0.15 * top:
+            break
+        top = top or h[best]
+        off = (angs - best - 0.5 + 45) % 90 - 45
+        near = np.abs(off) < 2.5
+        a = best + 0.5 + float((off[near] * lens[near]).sum() / lens[near].sum())
+        a = a if a < 45 else a - 90
+        out.append(0.0 if abs(a) < 1 else round(a, 1))
+        angs, lens = angs[np.abs(off) >= 5], lens[np.abs(off) >= 5]
+    return out or [0.0]
+
+
+def nearest_label(lab, sx, sy, R):
+    y0, x0 = max(0, sy - R), max(0, sx - R)
+    win = lab[y0:sy + R, x0:sx + R]
     ys, xs = np.nonzero(win)
     if not len(ys):
-        return None, "no open floor right at the label (label outside the room?)"
-    j = np.argmin((ys + max(0, sy - R) - sy) ** 2 + (xs + max(0, sx - R) - sx) ** 2)
-    i = win[ys[j], xs[j]]
-    x, y, w, h, _ = stats[i]
-    Hh, Ww = lab.shape
-    m = cv2.dilate((lab == i).astype(np.uint8), ker) & free
-    area_pt2 = m.sum() / scale / scale
-    if x <= r + 2 or y <= r + 2 or x + w >= Ww - r - 2 or y + h >= Hh - r - 2:
+        return 0
+    j = np.argmin((ys + y0 - sy) ** 2 + (xs + x0 - sx) ** 2)
+    return int(win[ys[j], xs[j]])
+
+
+def grow_labels(lab, free, steps):
+    """Let every labelled area claim the free pixels closest to it (up to `steps` px)."""
+    lab = lab.astype(np.float32)
+    k = np.ones((3, 3), np.uint8)
+    for _ in range(steps):
+        g = cv2.dilate(lab, k)
+        new = (lab == 0) & (free > 0) & (g > 0)
+        if not new.any():
+            break
+        lab[new] = g[new]
+    return lab
+
+
+def largest(mask):
+    n, lab, st, _ = cv2.connectedComponentsWithStats(mask.astype(np.uint8), connectivity=4)
+    if n < 2:
+        return mask.astype(np.uint8) * 0
+    return (lab == 1 + int(np.argmax(st[1:, 4]))).astype(np.uint8)
+
+
+def floor_masks(plan, scale, floor_rgb=(), thin_pt=2.0, door_pt=10, dark=170, dividers=()):
+    """What the room finder needs from one plan picture:
+    walls   - grey areas thicker than thin_pt, and long thin lines darker than
+              `dark` (thin walls); light thin lines (door swings) are not walls,
+    floorA  - floor with door leaves/arcs and window frames still closed
+              (decides which room is which: doors keep rooms apart),
+    floorB  - floor without any thin lines (decides the shape: door swings
+              and seat rows inside a room belong to it),
+    outside - white connected to the page edge.
+    dividers (lists of [x, y] pt) are drawn in as walls: they split open areas
+    the plan has no wall for (a folding partition, a row of pillars)."""
+    nonwhite = plan.min(2) <= 225
+    keep = np.zeros(nonwhite.shape, bool)  # coloured areas that count as floor (stages)
+    for rgb, tol in floor_rgb:
+        keep |= np.sqrt(((plan.astype(np.int32) - np.array(rgb)) ** 2).sum(2)) < tol
+    t = max(1, int(round(thin_pt * scale / 2)))
+    walls = cv2.morphologyEx((nonwhite & ~keep).astype(np.uint8), cv2.MORPH_OPEN, _disk(t)) > 0
+    thin = (nonwhite & ~walls & ~keep).astype(np.uint8)
+    n, lab, st, _ = cv2.connectedComponentsWithStats(thin, connectivity=8)
+    big = np.zeros(n, bool)
+    big[1:] = np.maximum(st[1:, 2], st[1:, 3]) >= door_pt * scale  # door leaves, arcs, window frames
+    doors = big[lab]
+    near_keep = cv2.dilate(keep.astype(np.uint8), _disk(max(1, int(2 * scale)))) > 0
+    doors &= ~near_keep  # the outline and tiles of a stage don't split a room
+    thin_walls = doors & (plan.min(2) < dark)
+    walls |= cv2.dilate(thin_walls.astype(np.uint8), np.ones((3, 3), np.uint8)) & nonwhite & ~keep > 0
+    if dividers:
+        drawn = np.zeros(walls.shape, np.uint8)
+        for line in dividers:
+            cv2.polylines(drawn, [(np.array(line) * scale).astype(np.int32)], False, 1, max(2, int(1.5 * scale)))
+        walls |= drawn > 0
+    n, lab = cv2.connectedComponents((~nonwhite).astype(np.uint8), connectivity=4)
+    edge = np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))
+    outside = cv2.dilate(np.isin(lab, edge[edge > 0]).astype(np.uint8), _disk(t + 1)) > 0
+    return {"walls": walls, "outside": outside, "scale": scale,
+            "floorA": (~walls & ~doors & ~outside).astype(np.uint8),
+            "floorB": (~walls & ~outside).astype(np.uint8)}
+
+
+def room_mask(P, seed_pt, door_pt=13, opening_pt=18, slot_pt=4, max_area_pt2=None, search_pt=25, skip_big=False):
+    """The room around seed_pt as a mask (and its x/y offset), or (None, reason).
+
+    1. Squares of side 2*door_pt are fitted into the floor (door leaves count
+       as walls): each connected group of them is one room; doorways narrower
+       than the square keep rooms apart.
+    2. Each room then claims the floor nearest to it with thin lines ignored,
+       so door swings and seat rows count as room.
+    3. Anything narrower than 2*opening_pt sticking out of it (a doorway) is
+       cut off along the wall line; slots narrower than 2*slot_pt (short wall
+       stubs, pillars) are filled.
+    Squares are turned to the walls around the room; for rooms between walls at
+    two angles the results for both are combined.
+    The room is the one nearest seed_pt within search_pt; with skip_big, rooms
+    larger than max_area_pt2 are passed over instead of reported."""
+    s = P["scale"]
+    r = int(door_pt * s)
+    sx, sy = int(seed_pt[0] * s), int(seed_pt[1] * s)
+    if not skip_big and P["outside"][sy, sx]:
         return None, "label is outside the building"
-    if area_pt2 > 0.05 * page_area_pt2:
-        return None, f"open area, no closed outline ({area_pt2:.0f} pt²)"
-    if area_pt2 < 300:
+    key = ("rooms", door_pt)
+    if key not in P:
+        P[key] = cv2.connectedComponentsWithStats(square_morph(P["floorA"], r), connectivity=4)
+    _, lab0, st, _ = P[key]
+    if skip_big and max_area_pt2:
+        small = st[:, 4] / s / s <= max_area_pt2
+        small[0] = False
+        i = nearest_label(np.where(small[lab0], lab0, 0), sx, sy, int(search_pt * s))
+    else:
+        i = nearest_label(lab0, sx, sy, int(search_pt * s))
+    if not i:
+        return None, "no open floor right at the label (label outside the room?)"
+    x, y, w, h, area = st[i]
+    if max_area_pt2 and area / s / s > max_area_pt2:
+        return None, f"open area, no closed outline ({area / s / s:.0f} pt²)"
+    H, W = lab0.shape
+    p = 3 * r
+    x0, y0, x1, y1 = max(0, x - p), max(0, y - p), min(W, x + w + p), min(H, y + h + p)
+    crop = lambda a: a[y0:y1, x0:x1]
+    near = cv2.dilate((crop(lab0) == i).astype(np.uint8), np.ones((r, r), np.uint8)) > 0
+    angs = wall_angles(crop(P["walls"]) & near, s)
+    m = np.zeros((y1 - y0, x1 - x0), np.uint8)
+    for ang in angs:
+        A = square_morph(crop(P["floorA"]), r, ang)
+        B = square_morph(crop(P["floorB"]), r, ang)
+        _, lab = cv2.connectedComponents(A, connectivity=4)
+        j = nearest_label(lab, sx - x0, sy - y0, int(search_pt * s))
+        if not j:
+            continue
+        one = (grow_labels(lab, A | B, 3 * r) == j).astype(np.uint8)
+        cut = square_morph(one, int(opening_pt * s), ang)
+        m |= cut if cut.sum() > 0.7 * one.sum() else one
+    if not m.any():
+        return None, "no open floor right at the label (label outside the room?)"
+    for ang in angs:
+        m = square_morph(m, max(1, int(slot_pt * s)), ang, cv2.MORPH_CLOSE)
+    m = largest(m & ~crop(P["outside"]))
+    return (m, (x0, y0)), None
+
+
+def mask_to_poly(m, off, scale, eps_pt=1.0):
+    cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE, offset=off)
+    c = max(cnts, key=cv2.contourArea)
+    a = cv2.approxPolyDP(c, eps_pt * scale, True)
+    return [[round(float(q[0][0]) / scale, 1), round(float(q[0][1]) / scale, 1)] for q in a]
+
+
+def room_settings():
+    rs = CFG.get("roomShapes", {})
+    keys = {k["category"]: k for k in CFG["rasterKey"]}
+    floor_rgb = [(keys[c]["rgb"], keys[c].get("tolerance", 48)) for c in rs.get("floorColours", []) if c in keys]
+    return rs, floor_rgb
+
+
+def room_shape(P, seed_pt, page_area_pt2, name=""):
+    """Outline of the room around a label: (polygon, None) or (None, reason).
+    roomShapes.perRoom[name] can change doorPt/openingPt for one room."""
+    rs, _ = room_settings()
+    own = rs.get("perRoom", {}).get(name, {})
+    res, why = room_mask(P, seed_pt, own.get("doorPt", rs.get("doorPt", 13)), own.get("openingPt", rs.get("openingPt", 18)),
+                         rs.get("slotPt", 4), max_area_pt2=rs.get("maxPageShare", 0.05) * page_area_pt2)
+    if why:
+        return None, why
+    m, off = res
+    if m.sum() / P["scale"] ** 2 < 300:
         return None, "area too small"
-    cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    return contour_to_poly(max(cnts, key=cv2.contourArea), scale, 2.0), None
+    return mask_to_poly(m, off, P["scale"], rs.get("simplifyPt", 1.0)), None
+
+
+def room_near(P, pt, page_area_pt2, radius=15):
+    """The indoor room closest to `pt` (e.g. where a leader line ends on a
+    window), traced with small doorways (these rooms are small). Outdoor space
+    and huge areas are skipped."""
+    rs, _ = room_settings()
+    door = rs.get("smallDoorPt", 5)
+    res, why = room_mask(P, pt, door, rs.get("smallOpeningPt", 8), rs.get("slotPt", 4),
+                         max_area_pt2=0.05 * page_area_pt2, search_pt=radius, skip_big=True)
+    if why:
+        return None
+    m, off = res
+    if m.sum() / P["scale"] ** 2 < 150:
+        return None
+    return mask_to_poly(m, off, P["scale"], rs.get("simplifyPt", 1.0))
 
 
 def unkeyed_colours(plan, scale, keys, exclude_boxes):
@@ -837,10 +1000,14 @@ def main():
                       for ln in blk["lines"] for sp in ln["spans"] for ch in sp["chars"] if ch["c"].strip()]
 
         # 4. rooms
+        rs, floor_rgb = room_settings()
+        room_P = floor_masks(plan, scale, floor_rgb, rs.get("thinLinePt", 2.0), rs.get("doorLinePt", 10),
+                             rs.get("thinWallDarkerThan", 170),
+                             [d["line"] for d in rs.get("dividers", []) if d["floor"] == fid])
         no_shape = []
         for b in room_blocks:
             name, desc = tidy_name(b)
-            poly, why = room_shape(plan, (b["cx"], b["cy"]), scale, W * H)
+            poly, why = room_shape(room_P, (b["cx"], b["cy"]), W * H, name)
             it = {
                 "id": new_id(f"room-{slug(name)}"), "floor": fid, "category": "rooms",
                 "name": name, "aliases": [],
@@ -869,9 +1036,9 @@ def main():
                     # first: the room just behind the wall the line ends on;
                     # if none (or already found): the indoor room nearest the line's end
                     seed = behind_wall(plan, scale, (ex, ey), (ux, uy))
-                    pp = room_near(plan, seed, scale, W * H, radius=4) if seed else None
+                    pp = room_near(room_P, seed, W * H, radius=4) if seed else None
                     if not pp or known(pp):
-                        pp = room_near(plan, (ex, ey), scale, W * H)
+                        pp = room_near(room_P, (ex, ey), W * H)
                     if pp and not known(pp):
                         polys.append(pp)
                 if polys:
@@ -1130,8 +1297,9 @@ def write_report(stats, gen, final):
          "- **The floor plan itself, including the coloured toilets / stairs / lifts / stages, is one embedded picture per floor**, "
          "not vector shapes (same in the PPTX). Those areas were therefore found by colour in the picture (see the colour key in "
          "`scripts/import-config.json`). Check the review pictures for these especially.",
-         "- Room outlines are a flood-fill of the white space around each room label. Rooms with open doorways or a label "
-         "outside the room get a pin only.", "",
+         "- Room outlines are traced from the plan around each room label: squares are fitted between the walls (so corners "
+         "stay square and doorways are cut along the wall line), door swings count as room. Open areas without a wall "
+         "between rooms need a divider in `scripts/import-config.json` (`roomShapes.dividers`); without one they get a pin only.", "",
          "## Counts per floor", "",
          "| Floor | " + " | ".join(sorted({k for s in stats.values() for k in s})) + " |",
          "|---|" + "---|" * len({k for s in stats.values() for k in s})]
