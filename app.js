@@ -700,6 +700,11 @@
   // The card's round icon: draw an outline around the things it shows, keep
   // it a moment, then fade it out (timing: .trace in style.css). Shapes get
   // their outline, things with only a pin a circle around it.
+  // The dash runs along pathLength="1", so it closes exactly once round at any
+  // zoom. That only works with a stroke in map units: with
+  // vector-effect: non-scaling-stroke browsers measure the dash on screen and
+  // the outline stopped short (zoomed in) or wrapped round (zoomed out).
+  // So the line width is set per zoom instead.
   const TRACE_MS = 2000; // draw 1 s + stay 0.5 s + fade 0.5 s
   let traceT = 0;
   function traceOutlines(items) {
@@ -712,8 +717,8 @@
         ? it._polys.map((poly) => ['polygon', { points: poly.map((q) => q.join(',')).join(' ') }])
         : [['circle', { cx: it.pin[0], cy: it.pin[1], r: 26 / k }]];
       for (const [tag, a] of shapes) {
-        el(tag, { ...a, class: 'trace-halo', pathLength: 1 }, traceLayer);
-        el(tag, { ...a, class: 'trace', pathLength: 1, stroke: c }, traceLayer);
+        el(tag, { ...a, class: 'trace-halo', pathLength: 1, 'stroke-width': 8 / k }, traceLayer);
+        el(tag, { ...a, class: 'trace', pathLength: 1, stroke: c, 'stroke-width': 4 / k }, traceLayer);
       }
     }
     traceT = setTimeout(() => (traceLayer.innerHTML = ''), TRACE_MS + 100);

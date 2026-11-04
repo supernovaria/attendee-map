@@ -25,7 +25,7 @@ Static files only: no server, no database, no login. Brief: [`venue-map-brief.md
 - **Tap a printed label** (e.g. *Nap Rooms*) to select that thing; tapping the *Organisations Fair* title selects the whole Org fair.
 - **Floor tabs**: the current floor has a thin outline in that floor's colour; tapping it again shows the whole floor. Switching floor automatically (from search or a category) shows a short "Switched to …" message.
 - **Tap anything on the map** to see what it is.
-- **Colours** on the plan are muted. While something is selected, everything else turns grey (labels, pins, coloured areas) and only the selection keeps its colour; the plan's walls and outlines stay as they are. Add `&outline=1` to the URL to also draw an outline around selected areas (for comparison).
+- **Colours** on the plan are muted. While something is selected, everything else turns grey (labels, pins, coloured areas) and only the selection keeps its colour; the plan's walls and outlines stay as they are. A selected room is marked like with a highlighter (pale blue in light mode, blue-grey in dark mode); its walls, doors and text keep full contrast. Add `&outline=1` to the URL to also draw an outline around selected areas (for comparison).
 - **Org fair**: the printed boxes only show while Org fair is selected. Of the three arrows from the *Organisations Fair* title only the middle one is shown (`hiddenArrows` in `scripts/import-config.json`).
 - **Labels**: with something selected, only its labels stay crisp and the rest fade. The **Aa** button (top right of the map) shows every label exactly as printed in the PDF; the choice is remembered on that phone.
 - **Colours**: the round button under **Aa** switches between *automatic* (half circle: light or dark like the phone), *light* (sun) and *dark* (moon). In dark the map itself is dark too: white paper turns dark grey, black walls and text turn light, the coloured areas keep their colours. Remembered on that phone.
@@ -94,7 +94,7 @@ Never edit `data/overlay.json` by hand; the next import overwrites it. Correctio
 | Org fair areas | Outlined boxes drawn in Canva | High |
 | Charging station | End of the arrow from its label | Check on site |
 | Toilets, stairs, lifts, stages | **Colour in the floor-plan picture**, using the legend colours (+ the cream spiral staircases) | Good, but check: the plan is one picture in the PDF, not shapes |
-| Room outlines | Flood-fill of the white floor around each label. Labels outside the building (e.g. *Nap Rooms*) follow their thin lines to the room(s) they point at | Partial: open-plan areas get a pin only |
+| Room outlines | Traced from the plan around each label: walls are followed with square corners, doorways are cut along the wall line, door swings count as part of the room. Open areas with no wall between two rooms are split by *dividers* in `scripts/import-config.json` (`roomShapes.dividers`, e.g. the 3rd-floor Foyer/Voltaire pillar row). Labels outside the building (e.g. *Nap Rooms*) follow their thin lines to the room(s) they point at | Good. A few outlines are still hand-drawn in the overrides (Kleist Hall, Registration, Main entrance, Spontaneous Conversation Area) |
 
 Areas painted over by a box in Canva (e.g. a lift hidden with a grey box) are left out and reported.
 
@@ -145,7 +145,7 @@ If the repo goes private later, Cloudflare Pages can deploy from a private repo 
 
 ## Known gaps
 
-- Every room has an outline except *Outside Area 1:1s* (highlights as a pin). Outlines can be added or corrected with a `rect`/`polygon` via overrides.
+- Every room has an outline except *Outside Area 1:1s* (highlights as a pin). Outlines can be added or corrected with a `rect`/`polygon` via overrides; where two rooms share an open area, a divider line in `scripts/import-config.json` (`roomShapes.dividers`) is usually the better fix, because the import then traces both rooms itself.
 - No offline mode (deliberately: a stale cached map is worse than a slow one).
 - English UI only (decided).
 - Stages are extracted but switched off (`categories` in the overrides to turn on).

@@ -13,6 +13,31 @@
     "mutedSaturation": 0.3
   },
   "rasterScale": 3,
+  "roomShapes": {
+    "_comment": "How room outlines are traced from the plan picture (pt). Lines thinner than thinLinePt are not walls unless darker than thinWallDarkerThan (0-255; thin walls are dark grey, door swings light grey). Door leaves, arcs and window frames (thin lines at least doorLinePt long) still keep rooms apart, but door swings count as room. Doorways narrower than 2*doorPt separate rooms; bits narrower than 2*openingPt sticking out of a room (doorways) are cut along the wall; slots narrower than 2*slotPt (wall stubs, pillars) are filled. smallDoorPt/smallOpeningPt: the same for small rooms found by following a label's leader lines. floorColours: coloured areas (rasterKey categories) that count as floor, e.g. stages inside a room. simplifyPt: how far the outline may stray from the traced edge. maxPageShare: a room bigger than this share of the page is taken as an open area (no outline).",
+    "thinLinePt": 2,
+    "doorLinePt": 10,
+    "thinWallDarkerThan": 170,
+    "doorPt": 13,
+    "openingPt": 18,
+    "slotPt": 4,
+    "smallDoorPt": 5,
+    "smallOpeningPt": 8,
+    "simplifyPt": 1.0,
+    "floorColours": ["stages"],
+    "maxPageShare": 0.08,
+    "_perRoom": "Settings for one room, by its printed name. Smaller doorPt/openingPt keep narrow corridors that belong to an open foyer (but would let a small room leak through its doors).",
+    "perRoom": {
+      "Third Floor Foyer": {"doorPt": 8, "openingPt": 12, "why": "includes the corridors to the toilets and both staircases (decided 3 Nov)"},
+      "Arnheim-Foyer": {"doorPt": 8, "openingPt": 12, "why": "includes the strip along the outer wall by the bench"}
+    },
+    "_dividers": "Lines (pt) drawn in as walls before tracing, where an open area holds rooms the plan has no wall between. Each: floor id, line, why.",
+    "dividers": [
+      {"floor": "1", "line": [[185, 615], [430, 708]], "why": "Humboldt Hall / Cafeteria: along the cafeteria's bottom wall and the pillars"},
+      {"floor": "2", "line": [[240, 601], [620, 601]], "why": "Edison / 2nd-floor foyer: along the wall with the double doors"},
+      {"floor": "3", "line": [[270, 599.5], [600, 599.5]], "why": "Third Floor Foyer / Voltaire: the folding partition along the row of pillars"}
+    ]
+  },
   "floors": [
     {
       "page": 0,
