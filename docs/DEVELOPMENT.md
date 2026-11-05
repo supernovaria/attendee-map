@@ -60,7 +60,7 @@ Coordinates everywhere are **PDF points of the page** (843 × 1191). That is why
    - `group_blocks`: label = leading lines at the largest font size; the rest is the description.
    - 2a. Meeting points: orange pins (`find_pins`) greedily matched to the nearest "Point …" label.
    - 2b. Navy pins → Catering / Project fair by nearest label.
-   - 2c. Outlined boxes with a coloured stroke (`find_outlined_areas`) → Org/Project fair areas. Categories listed in `boxesOnlyWhenSelected` get `labelsWhenSelected` (the box footprint), so the viewer hides the printed box unless selected.
+   - 2c. Outlined boxes with a coloured stroke (`find_outlined_areas`) → Org/Project fair areas. Categories listed in `boxesOnlyWhenSelected` get `labelsWhenSelected` (the box footprint), so the viewer hides the printed box unless selected. Anything else printed that touches the box (arrow tips, lines, letters: `things_on`) is cut out of that footprint so it isn't clipped, but the box's own outline stays hidden there (`always` in `footprint`).
    - 2d. Charging and leftover category labels → pin at the label (or the end of its arrow).
 3. **Colour areas.** `colour_regions` on the plan-only picture, colours from `rasterKey` in the config (toilets, stairs, lifts, stages, cream spiral stairs). `ignoreRaster` lists known false positives. Areas under Canva grey boxes (`canva_covers`) are excluded and reported as closed.
 4. **Rooms.**
@@ -164,6 +164,7 @@ Pins within 22 px, then printed labels (`labelBoxes` up to 4000 pt²; a label sh
 - 5 Nov: selecting a room draws its outline briefly (shorter than the round icon's), and the view shows the whole room rather than zooming in on its marker. New users get a gentle ring on the round icon until they've tapped it once (owner request: an unobtrusive tutorial).
 - 5 Nov: a selected room is shown with a highlighter (blend mode) instead of a white veil, so its walls and door lines keep their contrast.
 - 5 Nov: hidden arrows are removed from the PDF drawing before rendering instead of masked in the viewer (owner: the mask cut light stripes through the Org fair box the arrows crossed). They no longer show with *All labels* either.
+- 5 Nov: the Org fair box's hiding area no longer clips things touching the box (owner: the charging-station arrowhead was cut off).
 - 5 Nov: no app marker on a selected meeting point (owner: it stood beside the printed pin, two pins for one spot). A category flag (`marker: false`) rather than a check in code, so Catering / Project fair (also printed pins) can follow with one line in the config. Dark mode: printed meeting-point pins get a white hairline, made by the import, because their pale needle disappeared on the dark floor.
 
 ## 5. Known gaps / ideas not done

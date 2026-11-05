@@ -433,20 +433,80 @@ def path_points(d):
     return out
 
 
-def footprint(shapes, scale, page_rect, pad):
-    """Outline(s) around drawn shapes, `pad` pt wider: what to mask out of the
-    label layer to hide them. shapes = [("fill"|"line", [(x, y), ...], width)]."""
-    m = np.zeros((int(page_rect.height * scale) + 1, int(page_rect.width * scale) + 1), np.uint8)
+def _paint(m, shapes, scale):
     for kind, pts, w in shapes:
         a = (np.array(pts) * scale).astype(np.int32)
         if kind == "fill":
             cv2.fillPoly(m, [a], 1)
         else:
             cv2.polylines(m, [a], False, 1, max(1, int(w * scale)))
+
+
+def _disc(pad, scale):
     k = max(3, int(2 * pad * scale) | 1)
-    m = cv2.dilate(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
+    return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+
+
+def footprint(shapes, scale, page_rect, pad, minus=(), minus_pad=1, always=()):
+    """Outline(s) around drawn shapes, `pad` pt wider: what to mask out of the
+    label layer to hide them. shapes = [("fill"|"line", [(x, y), ...], width)].
+    `minus`: shapes (same form) that must stay visible, cut out `minus_pad` pt
+    wider, except where they meet `always` (e.g. the box's own outline)."""
+    m = np.zeros((int(page_rect.height * scale) + 1, int(page_rect.width * scale) + 1), np.uint8)
+    _paint(m, shapes, scale)
+    m = cv2.dilate(m, _disc(pad, scale))
+    if minus:
+        k = np.zeros_like(m)
+        _paint(k, minus, scale)
+        a = np.zeros_like(m)
+        _paint(a, always, scale)
+        m[(cv2.dilate(k, _disc(minus_pad, scale)) > 0) & (a == 0)] = 0
     cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     return [{"type": "polygon", "points": contour_to_poly(c, scale, 0.6)} for c in cnts if len(c) >= 3]
+
+
+def drawing_shapes(d):
+    """A vector drawing as footprint shapes (curves by their control polygon)."""
+    w = d.get("width") or 1
+    filled = d.get("fill") is not None
+    out = []
+    for it in d["items"]:
+        if it[0] == "re":
+            r = it[1]
+            pts = [(r.x0, r.y0), (r.x1, r.y0), (r.x1, r.y1), (r.x0, r.y1), (r.x0, r.y0)]
+        elif it[0] == "qu":
+            q = it[1]
+            pts = [tuple(q.ul), tuple(q.ur), tuple(q.lr), tuple(q.ll), tuple(q.ul)]
+        else:
+            pts = [tuple(p) for p in it[1:]]
+        out.append(("fill" if filled and len(pts) > 2 else "line", pts, w))
+    if filled:  # the whole outline too, for paths made of many small pieces
+        pts = [tuple(p) for it in d["items"] if it[0] in ("l", "c") for p in it[1:]]
+        if len(pts) > 2:
+            out.append(("fill", pts, w))
+    return out
+
+
+def things_on(page, covers, rect, skip):
+    """Visible drawings and characters touching `rect` (except `skip` drawings
+    and full-page backgrounds), as footprint shapes."""
+    R = pymupdf.Rect(rect)
+    out = []
+    for d in page.get_drawings():
+        r = d["rect"]
+        if not r.intersects(R) or r.contains(R) or d.get("fill_opacity") == 0 and d.get("color") is None:
+            continue
+        if is_hidden(d.get("seqno", 10**9), r, covers) or any(same_drawing(d, x) for x in skip):
+            continue
+        out += drawing_shapes(d)
+    for sp in page.get_texttrace():
+        if is_hidden(sp["seqno"], sp["bbox"], covers):
+            continue
+        for ch in sp["chars"]:
+            b = pymupdf.Rect(ch[3])
+            if chr(ch[0]).strip() and b.intersects(R):
+                out.append(("fill", [(b.x0, b.y0), (b.x1, b.y0), (b.x1, b.y1), (b.x0, b.y1)], 0))
+    return out
 
 
 def find_arrow(page, tip, covers, reach=8):
@@ -562,7 +622,7 @@ def find_outlined_areas(page, covers, legend):
             continue
         pts = path_points(d)
         if len(pts) >= 3:
-            out.append({"points": [list(p) for p in pts], "rect": tuple(r), "color": c})
+            out.append({"points": [list(p) for p in pts], "rect": tuple(r), "color": c, "drawing": d})
     return out
 
 
@@ -945,6 +1005,16 @@ def main():
 
         # 2. vector data
         covers = covering_images(page)
+        # arrows switched off in the config (hiddenArrows: floor -> arrow tips);
+        # taken out of the drawing before rendering (step 6), so what's under them
+        # (e.g. an org-fair box's fill) stays; if that fails they're masked out
+        arrows = []
+        for tip in CFG.get("hiddenArrows", {}).get(fid, []):
+            found = find_arrow(page, tip, covers)
+            if found:
+                arrows += found
+            else:
+                issue(fname, f"hiddenArrows: no arrow ends near {tip} any more (Canva layout changed?) - nothing hidden there.")
         lines, hidden = visible_lines(page, covers)
         if hidden:
             hb = group_blocks(hidden)
@@ -1021,7 +1091,8 @@ def main():
 
         # 2c. outlined areas -> nearest org/project fair label on the page
         fair_blocks = [b for b in cat_blocks if b["category"] in ("org-fair", "project-fair")]
-        for n, area in enumerate(find_outlined_areas(page, covers, legend), 1):
+        outlined = find_outlined_areas(page, covers, legend)
+        for n, area in enumerate(outlined, 1):
             if not fair_blocks:
                 issue(fname, f"Outlined box at {[round(v) for v in area['rect']]} has no fair label on this floor - skipped.")
                 continue
@@ -1039,8 +1110,12 @@ def main():
                 "labelBoxes": [xywh(area["rect"], 4), xywh(b["bbox"])],
             })
             if c in CFG.get("boxesOnlyWhenSelected", []):
-                # the printed box itself is only shown while its category/item is selected
-                items[-1]["labelsWhenSelected"] = footprint([("fill", pts, 0)], scale, page.rect, 4)
+                # the printed box itself is only shown while its category/item is selected;
+                # whatever else touches it (an arrow tip, a line, text) stays visible
+                skip = arrows + [o["drawing"] for o in outlined]  # other boxes have their own
+                keep = things_on(page, covers, pymupdf.Rect(area["rect"]) + (-6, -6, 6, 6), skip)
+                ring = [("line", [tuple(p) for p in pts + pts[:1]], (area["drawing"].get("width") or 1) + 1.5)]
+                items[-1]["labelsWhenSelected"] = footprint([("fill", pts, 0)], scale, page.rect, 4, keep, always=ring)
             if len(fair_blocks) > 1:
                 issue(fname, f"Outlined box at {[round(v) for v in area['rect']]} assigned to \"{b['text']}\" (nearest of several fair labels).")
             st[cats[c]["label"] + " areas"] = st.get(cats[c]["label"] + " areas", 0) + 1
@@ -1103,16 +1178,7 @@ def main():
             issue(fname, f"Colour #{rgb[0]:02X}{rgb[1]:02X}{rgb[2]:02X} covers ~{area:.0f} pt² but is not in the colour key.")
 
         # layers (needed for leader lines; written to disk below)
-        # arrows switched off in the config (hiddenArrows: floor -> arrow tips)
-        # are taken out of the drawing before rendering, so what's under them
-        # (e.g. an org-fair box's fill) stays; if that fails they're masked out
-        arrows = []
-        for tip in CFG.get("hiddenArrows", {}).get(fid, []):
-            found = find_arrow(page, tip, covers)
-            if found:
-                arrows += found
-            else:
-                issue(fname, f"hiddenArrows: no arrow ends near {tip} any more (Canva layout changed?) - nothing hidden there.")
+        # (hidden arrows: see step 2)
         cut = page_without(doc, page, arrows) if arrows else None
         C = render(cut[0] if cut else page, bscale)
         B = plan_only_render(doc, page, bscale, cover_boxes)
