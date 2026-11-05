@@ -74,11 +74,12 @@
       "color": "#111111"
     }
   ],
-  "_categoriesComment": "enabled:false = extracted for review but left out of data/overlay.json until Emily confirms (brief section 6).",
+  "_categoriesComment": "link = the word used after ?cat= in shareable links (old ?cat=<id> links keep working; never reuse a word). enabled:false = extracted for review but left out of data/overlay.json until Emily confirms (brief section 6).",
   "categories": [
     {
       "id": "toilets",
       "label": "Toilets",
+      "link": "full",
       "icon": "toilet",
       "color": "#9446C2",
       "enabled": true
@@ -86,6 +87,7 @@
     {
       "id": "food",
       "label": "Food & snacks",
+      "link": "hungry",
       "icon": "food",
       "color": "#0D3858",
       "enabled": true
@@ -93,6 +95,7 @@
     {
       "id": "meeting-points",
       "label": "Meeting points",
+      "link": "lonely",
       "icon": "pin",
       "color": "#F95C32",
       "marker": false,
@@ -101,6 +104,7 @@
     {
       "id": "stairs",
       "label": "Stairs",
+      "link": "climbing",
       "icon": "stairs",
       "color": "#E0A800",
       "enabled": true
@@ -108,6 +112,7 @@
     {
       "id": "charging",
       "label": "Charging",
+      "link": "charging",
       "icon": "bolt",
       "color": "#E08A00",
       "enabled": true
@@ -115,6 +120,7 @@
     {
       "id": "org-fair",
       "label": "Org fair",
+      "link": "hunting",
       "icon": "booth",
       "color": "#E8402A",
       "enabled": true
@@ -122,6 +128,7 @@
     {
       "id": "project-fair",
       "label": "Project fair",
+      "link": "curious",
       "icon": "flask",
       "color": "#2A6FDB",
       "enabled": true
@@ -129,6 +136,7 @@
     {
       "id": "rooms",
       "label": "Rooms",
+      "link": "room",
       "icon": "door",
       "color": "#555B66",
       "enabled": true,
@@ -137,6 +145,7 @@
     {
       "id": "lifts",
       "label": "Lifts",
+      "link": "elevating",
       "icon": "lift",
       "color": "#4FAD31",
       "enabled": false

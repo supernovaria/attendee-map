@@ -58,7 +58,11 @@ def main() -> int:
             dk = f.get("dark", {})
             if key in dk and not (site_root / dk[key]).exists():
                 errors.append(f"floor '{f['id']}': dark.{key} file '{dk[key]}' not found")
+    for d in dupes(c["link"] for c in data["categories"] if "link" in c):
+        errors.append(f"category link word '{d}' is used twice")
     for c in data["categories"]:
+        if c.get("link") in cats and c["link"] != c["id"]:
+            errors.append(f"category '{c['id']}': link word '{c['link']}' is another category's id")
         if "floor" in c and c["floor"] not in floors:
             errors.append(f"category '{c['id']}': floor '{c['floor']}' does not exist")
 

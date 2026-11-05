@@ -120,6 +120,10 @@
             "type": "string",
             "description": "Optional: selecting this category switches to this floor."
           },
+          "link": {
+            "$ref": "#/$defs/id",
+            "description": "Optional. Word used after ?cat= in shareable links (e.g. 'hungry' for food). Links with the category id keep working. Never reuse a word for something else once links are out."
+          },
           "chip": {
             "type": "boolean",
             "description": "false = no chip in the category bar (still searchable)."

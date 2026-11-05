@@ -123,6 +123,10 @@
     S.floors.forEach((f) => (S.floorById[f.id] = f));
     S.cats = (data.categories || []).filter((c) => c && c.id);
     S.cats.forEach((c) => (S.catById[c.id] = c));
+    // ?cat= takes a category's playful link word ("hungry") or, for old links, its id
+    S.catByLink = {};
+    S.cats.forEach((c) => (S.catByLink[c.id] = c));
+    S.cats.forEach((c) => c.link && (S.catByLink[c.link] = c));
     S.items = (data.items || []).filter((it) => it && it.id && S.floorById[it.floor] && S.catById[it.category] && Array.isArray(it.pin));
     S.items.forEach((it) => {
       S.itemById[it.id] = it;
@@ -149,7 +153,7 @@
     const q = new URLSearchParams(location.search);
     const item = S.itemById[q.get('item')];
     const floor = S.floorById[q.get('floor')];
-    const cat = S.catById[q.get('cat')];
+    const cat = S.catByLink[q.get('cat')];
     S.here = S.itemById[q.get('here')] || null;
     S.hereAt = performance.now();
     if (S.here) setTimeout(placeMarkers, HERE_TAG_MS + 50);
@@ -898,7 +902,7 @@
     if (S.item) p.set('item', S.item);
     else {
       if (S.floor !== S.floors[0].id) p.set('floor', S.floor);
-      if (S.cat) p.set('cat', S.cat);
+      if (S.cat) p.set('cat', S.catById[S.cat].link || S.cat);
     }
     if (S.here) p.set('here', S.here.id);
     if (OUTLINE) p.set('outline', '1');
