@@ -619,10 +619,6 @@
 <g data-i="charging-0">
 <g>
 <path transform="matrix(.65025,.37377,-.37377,.65025,186.21,600.86)" stroke-width="4" stroke-linecap="butt" stroke-miterlimit="4" stroke-linejoin="miter" fill="none" d="M0 2H73.671" class="s5"/>
-</g>
-</g>
-<g data-i="charging-0 org-fair-area-0">
-<g>
 <path transform="matrix(.65025,.37377,-.37377,.65025,186.21,600.86)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none" d="M65.671-4 73.671 2 65.671 8" class="s5"/>
 </g>
 </g>

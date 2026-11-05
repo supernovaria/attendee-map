@@ -589,12 +589,19 @@ def label_layer(page, fid, plan_seq, covers, drop, sel, chrome, pins, items):
             return ("sel", sel[o["seq"]])
         if any(overlap(o["bbox"], c) >= 0.5 for c in chrome_r):
             return ("chrome", "")
-        ids = []
+        found = []  # (item id, area of the smallest of its boxes that holds the element)
         for iid, rs in boxes:
-            if any(overlap(o["bbox"], r) >= 0.5 for r in rs) or \
-                    (o["kind"] == "stroke-path" and sum(1 for r in rs if (o["bbox"] + (-1, -1, 1, 1)).intersects(r)) >= 2):
-                ids.append(iid)  # inside its label/pin box, or a line joining two of its boxes
-        return ("items", " ".join(sorted(ids)))
+            inside = [r.get_area() for r in rs if overlap(o["bbox"], r) >= 0.5]
+            joins = o["kind"] == "stroke-path" and sum(1 for r in rs if (o["bbox"] + (-1, -1, 1, 1)).intersects(r)) >= 2
+            if inside or joins:  # inside its label/pin box, or a line joining two of its boxes
+                found.append((iid, min(inside) if inside else 0))
+        if o["kind"] != "fill-text" and len(found) > 1:
+            # a drawn shape (arrow, pin) belongs to the item with the tightest box, not to a
+            # big area box it happens to touch (the charging arrowhead at the Org fair box).
+            # Text keeps all its items: a room name inside a fair box shows with either.
+            least = min(a for _, a in found)
+            found = [(i, a) for i, a in found if a <= 1.5 * least]
+        return ("items", " ".join(sorted(i for i, _ in found)))
 
     # colours -> classes, so the viewer can grey them and dark mode can recolour them
     palette = {}
