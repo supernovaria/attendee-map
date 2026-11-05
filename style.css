@@ -143,7 +143,8 @@ svg { display: block; }
   .hl.lighten { fill: var(--room-tint); fill-opacity: 1; mix-blend-mode: var(--room-blend); }
 }
 .hl.no-line { stroke: none; }
-/* the card's round icon: outline drawn around what it shows (1 s), stays 0.5 s, fades (0.5 s) */
+/* outline drawn around what the card shows. Round icon: draw 1 s, stay 0.5 s, fade 0.5 s.
+   .quick (on selecting): draw 0.6 s, stay 0.25 s, fade 0.35 s = TRACE_QUICK_MS in app.js */
 .trace-layer { pointer-events: none; }
 /* no vector-effect here: it breaks the dash (see traceOutlines in app.js); width is set per zoom there */
 .trace, .trace-halo {
@@ -151,11 +152,13 @@ svg { display: block; }
   stroke-dasharray: 1 1; stroke-dashoffset: 1;
   animation: trace-draw 1s ease-in-out forwards, trace-fade .5s ease-in 1.5s forwards;
 }
+.trace.quick, .trace-halo.quick { animation: trace-draw .6s ease-in-out forwards, trace-fade .35s ease-in .85s forwards; }
 .trace-halo { stroke: #fff; opacity: .9; }
 @keyframes trace-draw { to { stroke-dashoffset: 0; } }
 @keyframes trace-fade { to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .trace, .trace-halo { stroke-dashoffset: 0; animation: trace-fade .5s ease-in 1.5s forwards; }
+  .trace.quick, .trace-halo.quick { animation: trace-fade .35s ease-in .85s forwards; }
 }
 .grey-layer { transition: opacity .18s; pointer-events: none; }
 .marker .bg { stroke: #fff; stroke-width: 2.5; filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
@@ -194,6 +197,20 @@ svg { display: block; }
 .dot-btn::after { content: ""; position: absolute; inset: -7px; } /* bigger tap target */
 .dot-btn .cat-dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--fg) 12%, transparent); }
 .dot-btn:active .cat-dot { transform: scale(.92); }
+/* first-time hint (until the icon has been tapped once): three soft rings and a small nudge.
+   --hint-delay < 0 when the card is redrawn mid-hint (app.js), so it carries on */
+.dot-btn.hint::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hint, var(--accent)) 65%, var(--fg)); opacity: 0;
+  animation: hint-ring 1.5s ease-out var(--hint-delay, .5s) 3;
+}
+.dot-btn.hint .cat-dot { animation: hint-nudge 1.5s ease-in-out var(--hint-delay, .5s) 3; }
+@keyframes hint-ring { 0% { transform: scale(1); opacity: .8; } 100% { transform: scale(1.9); opacity: 0; } }
+@keyframes hint-nudge { 0%, 40%, 100% { transform: scale(1); } 20% { transform: scale(1.1); } }
+@media (prefers-reduced-motion: reduce) {
+  .dot-btn.hint::before { animation: none; opacity: 1; transform: scale(1.25); } /* a still ring instead */
+  .dot-btn.hint .cat-dot { animation: none; }
+}
 .toast {
   position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); z-index: 3; max-width: calc(100% - 48px);
   background: var(--chip-on); color: var(--chip-on-fg); padding: 10px 16px; border-radius: 12px; font-weight: 650;
