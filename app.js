@@ -87,6 +87,11 @@
     allLabels: false,
   };
   try { S.allLabels = localStorage.getItem('venueMap.allLabels') === '1'; } catch (e) { /* private mode */ }
+  // First-time hint: the card's round icon pulses gently on every new
+  // selection until it has been tapped once (remembered on this phone).
+  let dotSeen = false, hintKey = '', hintAt = 0;
+  const HINT_MS = 5000; // 0.5 s wait + 3 rings of 1.5 s
+  try { dotSeen = localStorage.getItem('venueMap.dotSeen') === '1'; } catch (e) { /* private mode */ }
   const svg = $('svg'), mapEl = $('map');
   let vp, bgLayer, greyLayer, fullLayer, dimRect, maskG, hlLayer, labelGreyLayer, labelLayer, traceLayer, clipG, labMaskG, labGreyMaskG, markerLayer;
   // ?outline=1 draws the old outline around highlighted areas (for comparing)
@@ -438,10 +443,21 @@
     const bottom = sh.hidden ? 0 : sh.offsetHeight + 8;
     return { x0: 0, y0: 44, x1: cw, y1: Math.max(ch * 0.4, ch - bottom) }; // y0: below the Aa button
   }
-  function centreOn(it) {
-    const fb = freeBox();
-    const k = Math.max(S.view.k, S.fitK * 2.2);
-    setView({ k, x: (fb.x0 + fb.x1) / 2 - k * it.pin[0], y: (fb.y0 + fb.y1) / 2 - k * it.pin[1] });
+  // Bring one item into view. Zoom in (to at least 2.2 × the whole-floor
+  // zoom), but never so far that part of its outline is off screen: a big
+  // room like the Arnheim-Foyer must look big. Rooms are centred on their
+  // outline, things with only a pin on the pin.
+  function centreOn(it, instant) {
+    const fb = freeBox(), m = 36; // margin: room for the marker above the pin
+    let k = Math.max(S.view.k, S.fitK * 2.2);
+    let cx = it.pin[0], cy = it.pin[1];
+    const b = it._pts && bounds([it]);
+    if (b) {
+      const fitWhole = Math.min((fb.x1 - fb.x0 - 2 * m) / Math.max(b.x1 - b.x0, 1), (fb.y1 - fb.y0 - 2 * m) / Math.max(b.y1 - b.y0, 1));
+      k = Math.max(Math.min(k, fitWhole), S.fitK * 0.6);
+      cx = (b.x0 + b.x1) / 2; cy = (b.y0 + b.y1) / 2;
+    }
+    setView({ k, x: (fb.x0 + fb.x1) / 2 - k * cx, y: (fb.y0 + fb.y1) / 2 - k * cy }, instant);
   }
   // world-space bounds of some items (shapes, else pins)
   function bounds(items) {
@@ -689,7 +705,25 @@
     sh.querySelectorAll('[data-goto]').forEach((b) => (b.onclick = () => setFloor(b.dataset.goto)));
     sh.querySelectorAll('[data-cat]').forEach((b) => (b.onclick = () => selectCat(b.dataset.cat, { force: true, keepFloor: true })));
     const dot = sh.querySelector('.dot-btn');
+    if (dot && !dotSeen) {
+      // once per selection (HINT_MS, see .dot-btn.hint in style.css). The card is
+      // redrawn now and then (pictures loading, Aa …): the rings carry on where
+      // they were instead of starting again or stopping.
+      const key = S.item || 'cat:' + S.cat;
+      if (key !== hintKey) { hintKey = key; hintAt = performance.now(); }
+      const t = performance.now() - hintAt;
+      if (t < HINT_MS) {
+        dot.classList.add('hint');
+        dot.style.setProperty('--hint', (S.item ? S.catById[S.itemById[S.item].category] : cat).color || 'var(--accent)');
+        dot.style.setProperty('--hint-delay', (500 - t) / 1000 + 's');
+      }
+    }
     if (dot) dot.onclick = () => {
+      if (!dotSeen) {
+        dotSeen = true;
+        dot.classList.remove('hint');
+        try { localStorage.setItem('venueMap.dotSeen', '1'); } catch (e) { /* ignore */ }
+      }
       if (S.item) { S.pulseAt = performance.now(); centreOn(S.itemById[S.item]); setTimeout(placeMarkers, 3600); }
       else showItems(withHere(S.hl));
       traceOutlines(S.hl);
@@ -697,31 +731,36 @@
     const shareBtn = sh.querySelector('[data-share]');
     if (shareBtn) shareBtn.onclick = () => shareItem(S.itemById[S.item]);
   }
-  // The card's round icon: draw an outline around the things it shows, keep
-  // it a moment, then fade it out (timing: .trace in style.css). Shapes get
-  // their outline, things with only a pin a circle around it.
+  // Draw an outline around the things the card shows, keep it a moment, then
+  // fade it out (timing: .trace in style.css). Shapes get their outline,
+  // things with only a pin a circle around it.
+  // quick = on selecting something: shorter, and only for things with a shape
+  // (a pin gets its ripple instead). The card's round icon plays the full one.
   // The dash runs along pathLength="1", so it closes exactly once round at any
   // zoom. That only works with a stroke in map units: with
   // vector-effect: non-scaling-stroke browsers measure the dash on screen and
   // the outline stopped short (zoomed in) or wrapped round (zoomed out).
   // So the line width is set per zoom instead.
   const TRACE_MS = 2000; // draw 1 s + stay 0.5 s + fade 0.5 s
+  const TRACE_QUICK_MS = 1200; // draw 0.6 s + stay 0.25 s + fade 0.35 s (.trace.quick)
   let traceT = 0;
-  function traceOutlines(items) {
+  function traceOutlines(items, quick) {
     clearTimeout(traceT);
     traceLayer.innerHTML = '';
     const k = animState ? animState.to.k : S.view.k; // the zoom it is moving to
+    const cls = quick ? ' quick' : '';
     for (const it of items || []) {
+      if (quick && !it._polys.length) continue;
       const c = S.catById[it.category].color || '#e33';
       const shapes = it._polys.length
         ? it._polys.map((poly) => ['polygon', { points: poly.map((q) => q.join(',')).join(' ') }])
         : [['circle', { cx: it.pin[0], cy: it.pin[1], r: 26 / k }]];
       for (const [tag, a] of shapes) {
-        el(tag, { ...a, class: 'trace-halo', pathLength: 1, 'stroke-width': 8 / k }, traceLayer);
-        el(tag, { ...a, class: 'trace', pathLength: 1, stroke: c, 'stroke-width': 4 / k }, traceLayer);
+        el(tag, { ...a, class: 'trace-halo' + cls, pathLength: 1, 'stroke-width': 8 / k }, traceLayer);
+        el(tag, { ...a, class: 'trace' + cls, pathLength: 1, stroke: c, 'stroke-width': 4 / k }, traceLayer);
       }
     }
-    traceT = setTimeout(() => (traceLayer.innerHTML = ''), TRACE_MS + 100);
+    traceT = setTimeout(() => (traceLayer.innerHTML = ''), (quick ? TRACE_QUICK_MS : TRACE_MS) + 100);
   }
   function dotBtn(c, label) {
     return `<button class="dot-btn" aria-label="${esc(label)}" title="${esc(label)}">${catDot(c)}</button>`;
@@ -835,11 +874,8 @@
       if (S.ready) toast(`Switched to the ${S.floorById[it.floor].name}`);
     }
     render(opts);
-    if (opts.instant) {
-      const [cw, ch] = size();
-      const k = S.fitK * 2.2;
-      setView({ k, x: cw / 2 - k * it.pin[0], y: ch / 2 - k * it.pin[1] }, true);
-    } else centreOn(it);
+    centreOn(it, !!opts.instant);
+    traceOutlines([it], true);
     setTimeout(placeMarkers, 3600); // drop the pulse ring after it finishes
   }
 
@@ -983,7 +1019,9 @@
       best = inside[0] || null;
     }
     if (best) {
+      const changed = S.item !== best.id;
       S.item = best.id; S.way = null; S.pulseAt = 0; render();
+      if (changed) traceOutlines([best], true);
     } else if (S.item) {
       S.item = null; render();
     }
