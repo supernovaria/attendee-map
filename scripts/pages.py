@@ -28,6 +28,11 @@ BLOCK = re.compile(r"(<!-- link preview:[^\n]*-->\n)(.*?)(<!-- /link preview -->
 GENERATED = '<meta name="generator" content="scripts/pages.py">'
 
 
+def text(path):
+    """File contents with \\n line ends (git on Windows may check files out with \\r\\n)."""
+    return path.read_text(encoding="utf-8").replace("\r\n", "\n")
+
+
 def settings():
     cfg = json.loads((ROOT / "scripts/import-config.json").read_text(encoding="utf-8"))
     lp = cfg["linkPreview"]
@@ -91,7 +96,7 @@ def build(write=True):
     problems = []
 
     index_path = ROOT / "index.html"
-    index = index_path.read_text(encoding="utf-8")
+    index = text(index_path)
     if not BLOCK.search(index):
         return ["index.html has no '<!-- link preview: ... -->' block"]
     first = data["floors"][0]["id"]
@@ -130,7 +135,7 @@ def build(write=True):
             problems.append(f"maps/{p.name} is missing")
     missing = [i for i in want if not (PAGES_DIR / i / "index.html").exists()]
     old = [i for i, page in want.items() if i not in missing
-           and (PAGES_DIR / i / "index.html").read_text(encoding="utf-8") != page]
+           and text(PAGES_DIR / i / "index.html") != page]
     for what, ids in (("missing", missing), ("out of date", old)):
         if ids:
             problems.append(f"{len(ids)} item page(s) {what}: " + ", ".join(f"p/{i}/" for i in ids[:5]) + (" …" if len(ids) > 5 else ""))
