@@ -35,7 +35,7 @@ Static files only: no server, no database, no login. Brief: [`venue-map-brief.md
 - **Zoom**: pinch, double-tap, mouse wheel; the corner button resets.
 - **Links for printed QR codes** (open a pre-filtered view):
   - `…/?floor=1&cat=full` (floor 1, toilets highlighted). The word after `cat=` is a little joke about a cat: `hungry` (food), `full` (toilets), `charging`, `hunting` (Org fair), `curious` (Project fair), `climbing` (stairs), `elevating` (lifts), `lonely` (meeting points), `room` (rooms, no joke). Planned for categories still to come: `napping` (nap rooms), `praying` (prayer & meditation room), `inspecting` (museum exhibition). Tapping a category puts that word in the address bar, so shared links use it. Old links with the plain name (`cat=toilets`) still work. The words are set as `link` on each category in `scripts/import-config.json`; **don't change a word once it is printed.**
-  - `…/?item=mp-c3` (jumps to meeting point C3)
+  - `…/p/mp-c3/` (jumps to meeting point C3). Every room, meeting point etc. has a link like this, and it is what the **Share** button hands out. Pasted into Slack, WhatsApp and similar, it shows the item's name, its floor and a picture of that floor instead of just "Venue Map". The older `…/?item=mp-c3` still works but shows the plain "Venue Map" preview. Can be combined: `…/p/mp-c3/?here=mp-a1`.
   - `…/?here=mp-c3` (**You are here**: for a QR code on a sign at that spot. Opens that floor zoomed in around a blue dot with a "You are here" tag; the tag disappears after 8 seconds so it doesn't hide printed labels, the dot stays while browsing. Selecting a category keeps the dot in view if it has to move the map. Any item id works; can be combined, e.g. `?here=mp-c3&cat=toilets`.)
   - The bare URL stays the main QR target.
   - Item ids are listed in `data/overlay.json` and in the review pictures (`import/review/*.jpg`). **Never rename an id that has been printed.**
@@ -55,7 +55,7 @@ Two kinds of change.
    ```
 
 4. Read `import/import-report.md` and look at `import/review/*.jpg`. Fix anything wrong via step B.
-5. Commit and push. The URL stays the same.
+5. Commit and push. The URL stays the same. (The import also re-makes the link-preview pages in `p/`; see "Link previews" below.)
 
 Easiest if you're not at a terminal: ask Claude Code to "re-run the attendee map import with the new PDF, show me the report, and push".
 
@@ -135,7 +135,7 @@ For any other tool that wants to produce this map (the layout planner, a future 
      Colours are classes, and the file's own `<style>` says what they become in grey (`.off …`) and in dark mode (`.dark …`); ids in the file must be unique across floors (the import prefixes them with the floor id). A picture (png/webp) also works: it then fades as a whole while something is selected;
    - `item.labelBoxes`: `[x, y, w, h]` boxes where an item's printed label/pin sits (tapping there selects the item; the import uses them to tag the SVG);
    - `floor.dark`: `{background, backgroundHighlight, labels}` dark-mode versions of those pictures (same size); each missing one falls back to the light picture. (`labels` only for a picture: an SVG recolours itself.)
-9. **Any tool may regenerate `data/overlay.json` and `maps/` as long as `python3 scripts/validate.py` passes.**
+9. **Any tool may regenerate `data/overlay.json` and `maps/` as long as `python3 scripts/validate.py` passes** (then run `python3 scripts/pages.py` for the link-preview pages).
 
 Icon names available: `toilet food pin stairs bolt booth flask door lift stage info coat firstaid quiet registration` (anything else shows a dot).
 
@@ -144,6 +144,10 @@ Icon names available: `toilet food pin stairs bolt booth flask door lift stage i
 Any static host works; the site is the repository root (`index.html`, plus an empty `.nojekyll`).
 
 Current plan: **GitHub Pages**, repo public. Settings → Pages → *Deploy from a branch* → `main`, folder `/ (root)`. URL: `https://supernovaria.github.io/attendee-map/`.
+
+### Link previews
+
+`p/<item id>/index.html` (one per item) and `maps/<floor>-preview.jpg` are made by `python3 scripts/pages.py` (the import runs it). Each page is a copy of `index.html` with the item's own title, description and floor picture, which is what chat apps show for a pasted link. Settings, including the site's address, are `linkPreview` in `scripts/import-config.json`. **If the site moves, change `siteUrl` there and run the script**, or the preview pictures point at the old address. **After editing `index.html`, run the script too**; `validate.py` fails until you do. Chat apps keep a preview for a while, so a changed title can take hours to show for a link that was already pasted.
 
 If the repo goes private later, Cloudflare Pages can deploy from a private repo (the site itself stays public). **Moving host changes the URL and breaks printed QR codes**, so either settle the host before printing, or put the QR codes on a domain you control (e.g. a subdomain pointed at whichever host) so the host can change underneath.
 

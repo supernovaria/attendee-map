@@ -4,6 +4,11 @@
 (() => {
   const NS = 'http://www.w3.org/2000/svg';
   const DATA_URL = 'data/overlay.json';
+  // links: an item has its own page at p/<id>/ (scripts/pages.py, for link previews); its
+  // <base> points at the site root, so SITE is the root on every page
+  const SITE = new URL('./', document.baseURI);
+  const itemPath = (id) => `p/${encodeURIComponent(id)}/`;
+  const pathItem = () => { const m = location.pathname.match(/\/p\/([^/]+)\/?$/); return m ? decodeURIComponent(m[1]) : null; };
 
   // ---------------------------------------------------------------- icons
   // Built-in icon set, chosen by name in overlay.json. Unknown names -> dot.
@@ -148,10 +153,10 @@
     bindSearch();
     bindTheme();
 
-    // deep links: ?item=  or  ?floor= & cat=, plus ?here= (QR code on a sign:
-    // "You are here" at that item's spot, kept while browsing)
+    // deep links: p/<item>/ (or the older ?item=)  or  ?floor= & cat=, plus ?here= (QR code
+    // on a sign: "You are here" at that item's spot, kept while browsing)
     const q = new URLSearchParams(location.search);
-    const item = S.itemById[q.get('item')];
+    const item = S.itemById[pathItem() || q.get('item')];
     const floor = S.floorById[q.get('floor')];
     const cat = S.catByLink[q.get('cat')];
     S.here = S.itemById[q.get('here')] || null;
@@ -785,7 +790,7 @@
   }
   // "meet me at C3": a link that opens the map on that spot
   function shareItem(it) {
-    const url = `${location.origin}${location.pathname}?item=${encodeURIComponent(it.id)}`;
+    const url = new URL(itemPath(it.id), SITE).href; // its own page: the preview shows its name and floor
     const f = S.floorById[it.floor];
     if (navigator.share) {
       navigator.share({ title: it.name, text: `${it.name} (${f.name})`, url }).catch(() => {});
@@ -899,15 +904,14 @@
 
   function updateUrl() {
     const p = new URLSearchParams();
-    if (S.item) p.set('item', S.item);
-    else {
+    if (!S.item) {
       if (S.floor !== S.floors[0].id) p.set('floor', S.floor);
       if (S.cat) p.set('cat', S.catById[S.cat].link || S.cat);
     }
     if (S.here) p.set('here', S.here.id);
     if (OUTLINE) p.set('outline', '1');
     const qs = p.toString();
-    history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
+    history.replaceState(null, '', new URL((S.item ? itemPath(S.item) : '') + (qs ? `?${qs}` : ''), SITE).href);
   }
 
   // ---------------------------------------------------------------- gestures

@@ -1447,6 +1447,9 @@ def main():
     draw_review(doc, generated, final)
     write_report(stats, generated, final)
     print(f"Wrote {OUT_FINAL.relative_to(ROOT)} ({len(final['items'])} items), report: {OUT_REPORT.relative_to(ROOT)}")
+    # 8. link previews: a page per item (p/<id>/) and a small picture per floor
+    if OUT_FINAL == ROOT / "data/overlay.json":
+        subprocess.call([sys.executable, str(ROOT / "scripts/pages.py")])
     sys.exit(subprocess.call([sys.executable, str(ROOT / "scripts/validate.py"), str(OUT_FINAL)]))
 
 

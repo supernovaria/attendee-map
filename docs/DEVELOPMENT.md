@@ -35,6 +35,8 @@ source/attendee-map.pdf ──► scripts/import.py ──► data/overlay.json 
 | `source/raster/*` | High-res PNGs + `rasters.json` for a future layout planner (not loaded by the site) | no |
 | `source/*.pptx` | Older source of the floor plan (reference only, not used by the import) | – |
 | `schema/overlay.schema.json`, `scripts/validate.py` | Data contract | yes, keep in sync with the viewer |
+| `scripts/pages.py` | Link-preview pages and pictures (run by the import) | yes |
+| `p/<item id>/index.html`, `maps/<floor>-preview.jpg` | A copy of `index.html` per item with its own title/picture for chat-app previews | no, generated |
 
 ---
 
@@ -82,7 +84,9 @@ Coordinates everywhere are **PDF points of the page** (843 × 1191). That is why
    - Colours become classes (`f3` fill, `s3` stroke; no fill = black). The file's `<style>` gives each one: as printed, grey (`.off`, luma like the old grey copy), dark (`.dark`, the same `darken()` as the plan pictures) and dark grey. The see-through Org fair fills are pictures and keep their colour.
    - Meeting-point pins (`find_pins` → draw numbers) get a copy of their shapes right before them, class `h`, stroked `2 × dark.pinOutlinePt` wide in `dark.pinOutline`: the dark-mode hairline (shown only under `svg.dark`).
 
-Then: write `overlay.generated.json`, merge overrides (`merge`: `_`-prefixed keys are comments and are dropped), write `data/overlay.json`, the label layers, review pictures, report, validate.
+Then: write `overlay.generated.json`, merge overrides (`merge`: `_`-prefixed keys are comments and are dropped), write `data/overlay.json`, the label layers, review pictures, report, link previews (8, `scripts/pages.py`), validate.
+
+8. **Link previews** (`scripts/pages.py`, also runnable on its own; `--check` only reports, and `validate.py` runs that for `data/overlay.json`): `maps/<floor>-preview.jpg` = `source/raster/<floor>.png` (the printed page) at `linkPreview.previewWidthPx`; the `<!-- link preview -->` block in `index.html` (title, description, Open Graph tags with absolute URLs from `linkPreview.siteUrl`); and per item `p/<id>/index.html` = `index.html` with that block for the item plus `<base href="../../">`, so every relative path (CSS, JS, data, pictures, `fetch`, `<image href>`) resolves to the site root. Folders in `p/` with no item are deleted (only ones the script made: `<meta name="generator">`).
 
 ### Overrides
 
@@ -97,7 +101,7 @@ Format is in the README. Rules of thumb:
 
 ### State and flow
 
-One state object `S` (floor, category `cat`, `item`, view `{k, x, y}`, `allLabels`, `allFloors`, `here`, …). Everything goes through `render()`, which redraws highlights, masks, the floor tabs, chips and the bottom card, and updates the URL (`history.replaceState`; `?floor=&cat=` or `?item=`; `cat=` is written as the category's `link` word and read as either `link` or id via `S.catByLink`; `?here=` and `?outline=1` are kept). Entry points: `setFloor`, `selectCat`, `selectItem`, `tap`.
+One state object `S` (floor, category `cat`, `item`, view `{k, x, y}`, `allLabels`, `allFloors`, `here`, …). Everything goes through `render()`, which redraws highlights, masks, the floor tabs, chips and the bottom card, and updates the URL (`history.replaceState`; `?floor=&cat=` or `p/<item>/`, both built on `SITE` = the site root, which on an item page is its `<base>`; the item is read from the path (`pathItem`) or the older `?item=`; `cat=` is written as the category's `link` word and read as either `link` or id via `S.catByLink`; `?here=` and `?outline=1` are kept). Entry points: `setFloor`, `selectCat`, `selectItem`, `tap`.
 
 ### SVG layers (bottom to top), all inside one transformed `<g>` (`vp`)
 
@@ -181,7 +185,11 @@ Pins within 22 px, then printed labels (`labelBoxes` up to 4000 pt²; a label sh
   - Before → after per floor (ground / 1st / 2nd / 3rd): labels picture 128 / 81 / 63 / 61 KB plus a dark copy of the same size → one SVG of 56 / 38 / 27 / 27 KB gzipped (264 / 257 / 172 / 189 KB raw). Import time 94 s → 46 s on this PC (no more un-compositing and dark label copies).
   - Side effects, all closer to the PDF: the part of the grey cover box by Registration that Canva clips away no longer shows; the bit of building in the ground-floor title strip is now in the plan picture (muted with it) instead of the label layer; lines that join two of an item's label boxes (D3's long arrow) now count as that item's.
 
+- 5 Nov: **item links are `p/<id>/`** so a link pasted into Slack/WhatsApp shows the item's name, floor and a picture of that floor (owner request). Chat apps read the page's `<head>` without running JavaScript, and GitHub Pages serves one `index.html` for every query string, so each item needs its own file. A full copy of `index.html` per item rather than a small page that forwards to `?item=`: no extra request before the map starts, and the address bar keeps the nice link; everything heavy is shared through `<base>`. The preview picture is the printed page per floor (not per item with a marker: 4 files instead of 75, about 45–65 KB each). `?item=` keeps working for anything already printed.
+
 ## 5. Known gaps / ideas not done
+
+- Link previews show the item's floor, not the item's spot on it. A picture per item with a marker would be possible (75 small files).
 
 - Every room has an outline except Outside Area 1:1s (no edge on the plan; the paved strip by Point D4 could be outlined if that's the area). Still hand-drawn in the overrides: Kleist Hall (its seat rows still break the tracer), Registration/Info Desk/Wardrobe, Main entrance, Spontaneous Conversation Area (a Canva box). Still to confirm on site: where Arnheim-Foyer ends near the entrance, that the registration/wardrobe room is the tan strip + grey room, that the 3rd-floor Foyer/Voltaire split is the pillar row, and whether Humboldt Hall should include the strip towards the cafeteria.
 - Still to verify on site: charging station position, the long arrows to D3 and C5, the 2nd-floor lift's floor list ("Goes to floors 0, 1, 3" is an override).
@@ -197,6 +205,7 @@ Pins within 22 px, then printed labels (`labelBoxes` up to 4000 pt²; a label sh
 - **Before committing:** `node --check app.js`; `python3 scripts/validate.py`; if the import changed, look at `import/review/*.jpg` and the report.
 - **PyMuPDF updates:** the label layer relies on its SVG output lining up with `get_bboxlog()`; the import stops with a clear message if it doesn't. Pin the version in `scripts/requirements.txt` if that ever happens.
 - **Data contract changes:** update `schema/overlay.schema.json`, `scripts/validate.py` (if it needs a cross-check), the README "Data contract" section, and this file. New fields must be optional; the viewer must work without them.
-- **Never rename an item id** that may be printed in a QR code (`?item=…`).
+- **Never rename an item id** that may be printed in a QR code (`p/<id>/`, `?item=…`).
+- **After editing `index.html`**, run `python3 scripts/pages.py` (the item pages are copies of it); `validate.py` fails until then.
 - **Branches:** work happens on a feature branch and is fast-forwarded into `main` when the owner says so; `main` is what's live.
 - **Owner context:** not a software engineer. Explain changes in plain words, number options, give copy-pasteable commands. Mobile-first: judge every UI change on a phone-sized screen first.

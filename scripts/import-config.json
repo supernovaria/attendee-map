@@ -2,6 +2,13 @@
   "_comment": "Settings for scripts/import.py. Floors and categories here are the starting point; hand corrections go in import/overlay.overrides.json, not here.",
   "pdf": "source/attendee-map.pdf",
   "backgroundWidthPx": 2000,
+  "linkPreview": {
+    "_comment": "For scripts/pages.py: the page each item gets at p/<item id>/, so a pasted link shows the item's name and floor in Slack, WhatsApp etc. siteUrl = where the map is published (the preview picture needs the full address; change it if the site moves). siteName = the small line above the title. previewWidthPx = width of maps/<floor>-preview.jpg.",
+    "siteUrl": "https://supernovaria.github.io/attendee-map/",
+    "siteName": "Venue Map",
+    "description": "Floor plans of the venue: find toilets, food, meeting points, rooms.",
+    "previewWidthPx": 630
+  },
   "dark": {
     "_comment": "Dark-mode map pictures. floor = colour of white paper (match --map-bg in style.css), wall = colour of black lines and text. greyGamma > 1 keeps light-grey rooms darker. Coloured pixels: colourKeep scales them, minColourLightness lifts dark ones (navy text), mutedLightness/mutedSaturation are for the muted base plan. pinOutline/pinOutlinePt: thin line round the printed meeting-point pins (label layer only), so their pale needle shows on the dark floor.",
     "floor": "#1e2127",

@@ -6,7 +6,8 @@
 
 Checks the JSON Schema (schema/overlay.schema.json) plus things a schema
 cannot: references between floors/categories/items, unique ids, coordinates
-inside the floor, and that background files exist.
+inside the floor, that background files exist, and (for data/overlay.json)
+that the link-preview pages from scripts/pages.py are up to date.
 Exit code 0 = OK, 1 = problems found.
 """
 import json
@@ -96,6 +97,12 @@ def main() -> int:
         if f.get("labels", "").endswith(".svg") and lab.exists():
             for iid in sorted(set(re.findall(r'data-sel="([^"]+)"', lab.read_text(encoding="utf-8"))) - ids):
                 warnings.append(f"floor '{f['id']}': {f['labels']} has a box shown only when '{iid}' is selected, but there is no such item (never shown)")
+    # link-preview pages (p/<item id>/) match the items and the current index.html
+    if path.resolve() == (ROOT / "data/overlay.json").resolve():
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import pages
+        for p in pages.build(write=False):
+            errors.append(f"link previews: {p} (run: python3 scripts/pages.py)")
     return report(path, errors, warnings)
 
 
