@@ -145,6 +145,10 @@
             "type": "boolean",
             "description": "false = no chip in the category bar (still searchable)."
           },
+          "marker": {
+            "type": "boolean",
+            "description": "false = selecting an item draws no marker (the plan prints its own pin there, e.g. meeting points); the ripple plays round the printed pin instead."
+          },
           "aliases": {
             "type": "array",
             "items": {

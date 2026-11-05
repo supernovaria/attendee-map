@@ -1,6 +1,6 @@
 {
  "schemaVersion": 1,
- "updated": "2026-11-05T00:33:41+01:00",
+ "updated": "2026-11-05T04:22:08+01:00",
  "floors": [
   {
    "id": "0",
@@ -321,6 +321,7 @@
    "label": "Meeting points",
    "icon": "pin",
    "color": "#F95C32",
+   "marker": false,
    "aliases": [
     "meet"
    ]

@@ -313,6 +313,37 @@ def darken(rgb, muted=False):
     return (out.clip(0, 1) * 255).round().astype(np.uint8)
 
 
+def outline_pins(dark, layer, rects, scale):
+    """Dark labels picture: a thin line (dark.pinOutline, pinOutlinePx wide)
+    round each printed pin, so the pale needle shows on the dark floor.
+    Only the pin's coloured pixels get it (from the light `layer`), not label
+    text that reaches into its box. The line sits behind the pin."""
+    d = CFG["dark"]
+    px = d.get("pinOutlinePx", 0)
+    if not px:
+        return dark
+    out = dark.copy()
+    col = np.array(hexrgb(d.get("pinOutline", "#ffffff")), np.float32)
+    r = int(math.ceil(px))
+    kern = _disk(r)
+    H, W = out.shape[:2]
+    for x0, y0, x1, y1 in rects:
+        a0, b0 = max(0, int(x0 * scale) - r - 2), max(0, int(y0 * scale) - r - 2)
+        a1, b1 = min(W, int(math.ceil(x1 * scale)) + r + 2), min(H, int(math.ceil(y1 * scale)) + r + 2)
+        src = layer[b0:b1, a0:a1].astype(np.float32) / 255
+        sat = src[..., :3].max(2) - src[..., :3].min(2)
+        # full strength even where Canva drew the pin see-through (the needle is ~75 %)
+        pin = ((src[..., 3] > 0.1) & (sat > 0.15)).astype(np.float32)
+        ring = cv2.dilate(pin, kern)
+        t = out[b0:b1, a0:a1].astype(np.float32) / 255
+        al = t[..., 3]
+        under = ring * (1 - al)  # outline only where the labels picture is (partly) see-through
+        a_new = al + under
+        rgb = (t[..., :3] * al[..., None] + col * under[..., None]) / np.maximum(a_new, 1e-6)[..., None]
+        out[b0:b1, a0:a1] = (np.dstack([rgb, a_new]).clip(0, 1) * 255).round().astype(np.uint8)
+    return out
+
+
 def uncomposite(C, B):
     """Split the page render C into plan B + a transparent layer F (RGBA) so
     that F over B == C."""
@@ -1089,7 +1120,9 @@ def main():
         # the same three for dark mode (labels keep their transparency)
         Image.fromarray(darken(B, muted=True)).save(MAPS_DIR / f"{fid}-dark.webp", "WEBP", quality=74, method=6)
         Image.fromarray(darken(B)).save(MAPS_DIR / f"{fid}-full-dark.webp", "WEBP", quality=74, method=6)
-        Image.fromarray(np.dstack([darken(layer[..., :3]), layer[..., 3]]), "RGBA").save(
+        dark_layer = np.dstack([darken(layer[..., :3]), layer[..., 3]])
+        dark_layer = outline_pins(dark_layer, layer, [p["rect"] for p in mpins], bscale)
+        Image.fromarray(dark_layer, "RGBA").save(
             MAPS_DIR / f"{fid}-labels-dark.webp", "WEBP", quality=80, method=6)
         floor_rec["chromeBoxes"] = chrome
 

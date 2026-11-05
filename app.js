@@ -636,14 +636,24 @@
       // the searched/tapped item, or things with nothing printed on the plan
       if (S.item !== it.id && (it.labelBoxes?.length || it._pts)) continue;
       const cat = S.catById[it.category];
+      const ripple = S.item === it.id && !it._polys.length && performance.now() - S.pulseAt < 3500;
+      if (cat.marker === false) {
+        // the plan prints its own pin here (meeting points): a second one
+        // beside it only confuses. Ripple round the printed pin instead.
+        if (ripple) {
+          const [px, py] = it.pin;
+          const b = (it.labelBoxes || []).find(([bx, by, bw, bh]) => px >= bx && px <= bx + bw && py >= by && py <= by + bh);
+          const [cx, cy] = b ? [b[0] + b[2] / 2, b[1] + b[3] / 2] : it.pin;
+          el('circle', { class: 'pulse', cx: x + k * cx, cy: y + k * cy, r: 14 }, markerLayer);
+        }
+        continue;
+      }
       // the pin is often the middle of the printed name: then stand on top of
       // the name (its label box), so the marker never covers it
       const [ax, ay] = markerSpot(it);
       const sx = x + k * ax, sy = y + k * ay - (ay !== it.pin[1] ? 2 : 0);
       // ripple only where nothing else shows it: a highlighted room needs none
-      if (S.item === it.id && !it._polys.length && performance.now() - S.pulseAt < 3500) {
-        el('circle', { class: 'pulse', cx: sx, cy: sy, r: 14 }, markerLayer);
-      }
+      if (ripple) el('circle', { class: 'pulse', cx: sx, cy: sy, r: 14 }, markerLayer);
       // teardrop: the tip is exactly on the spot, the head floats above it
       const g = el('g', { class: 'marker', transform: `translate(${sx} ${sy})` }, markerLayer);
       el('path', { class: 'bg', d: 'M0 0C-3-7-14-13-14-24a14 14 0 1 1 28 0C14-13 3-7 0 0z', fill: cat.color || '#555' }, g);
