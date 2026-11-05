@@ -29,7 +29,7 @@ Static files only: no server, no database, no login. Brief: [`venue-map-brief.md
 - **Floor tabs**: the current floor has a thin outline in that floor's colour; tapping it again shows the whole floor. Switching floor automatically (from search or a category) shows a short "Switched to …" message.
 - **Tap anything on the map** to see what it is.
 - **Colours** on the plan are muted. While something is selected, everything else turns grey (labels, pins, coloured areas) and only the selection keeps its colour; the plan's walls and outlines stay as they are. A selected room is marked like with a highlighter (pale blue in light mode, blue-grey in dark mode); its walls, doors and text keep full contrast. Add `&outline=1` to the URL to also draw an outline around selected areas (for comparison).
-- **Org fair**: the printed boxes only show while Org fair is selected. Of the three arrows from the *Organisations Fair* title only the middle one is shown (`hiddenArrows` in `scripts/import-config.json`).
+- **Org fair**: the printed boxes only show while Org fair is selected. Of the three arrows from the *Organisations Fair* title only the middle one is shown (`hiddenArrows` in `scripts/import-config.json`; the import removes the others from the label image).
 - **Labels**: with something selected, only its labels stay crisp and the rest fade. The **Aa** button (top right of the map) shows every label exactly as printed in the PDF; the choice is remembered on that phone.
 - **Colours**: the round button under **Aa** switches between *automatic* (half circle: light or dark like the phone), *light* (sun) and *dark* (moon). In dark the map itself is dark too: white paper turns dark grey, black walls and text turn light, the coloured areas keep their colours. Remembered on that phone.
 - **Zoom**: pinch, double-tap, mouse wheel; the corner button resets.
@@ -131,7 +131,7 @@ For any other tool that wants to produce this map (the layout planner, a future 
    - `item.labelBoxes`: `[x, y, w, h]` boxes where an item's printed label/pin sits in that image (kept crisp when the item is highlighted, faded otherwise);
    - `floor.chromeBoxes`: title/legend areas, faded unless *All labels* is on;
    - `item.labelsWhenSelected`: shapes in the label image shown only while that item (or its category) is selected (e.g. the Org fair boxes);
-   - `floor.hiddenLabels`: shapes in the label image never shown, except with *All labels* (e.g. unwanted arrows);
+   - `floor.hiddenLabels`: shapes in the label image never shown, except with *All labels* (fallback for unwanted arrows the import couldn't remove from the PDF drawing; normally absent);
    - `floor.fixedBoxes`: areas of the label image that are always fully shown;
    - `floor.dark`: `{background, backgroundHighlight, labels}` dark-mode versions of those pictures (same size); each missing one falls back to the light picture.
 9. **Any tool may regenerate `data/overlay.json` and `maps/` as long as `python3 scripts/validate.py` passes.**

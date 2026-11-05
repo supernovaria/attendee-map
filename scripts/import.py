@@ -461,8 +461,89 @@ def find_arrow(page, tip, covers, reach=8):
         if is_hidden(d.get("seqno", 10**9), d["rect"], covers):
             continue
         if any(math.dist(q, tip) <= reach for a, b in segs for q in (a, b)):
-            found += [("line", [tuple(a), tuple(b)], d.get("width") or 1) for a, b in segs]
+            found.append(d)
     return found
+
+
+def arrow_segments(drawings):
+    return [("line", [tuple(it[1]), tuple(it[2])], d.get("width") or 1) for d in drawings for it in d["items"]]
+
+
+def same_drawing(a, b):
+    return all(abs(u - v) < 0.2 for u, v in zip(a["rect"], b["rect"])) and a.get("color") == b.get("color") \
+        and a.get("fill") == b.get("fill") and len(a["items"]) == len(b["items"])
+
+
+def content_groups(stream: bytes):
+    """Byte spans of all q ... Q groups (any depth) in a page's drawing code."""
+    if b"(" in stream or re.search(rb"(^|\s)BI(\s|$)", stream):
+        return None  # text strings / inline images: not worth parsing, use the mask instead
+    tok = re.compile(rb"<<|>>|<[0-9A-Fa-f\s]*>|\[|\]|/[^\s/<>\[\]()%]*|[^\s/<>\[\]()%]+")
+    stack, spans = [], []
+    for m in tok.finditer(stream):
+        if m.group() == b"q":
+            stack.append(m.start())
+        elif m.group() == b"Q":
+            if not stack:
+                return None
+            spans.append((stack.pop(), m.end()))
+    return spans if not stack else None
+
+
+def page_without(doc, page, drawings):
+    """A copy of `page` with the given vector drawings taken out of its drawing
+    code, so whatever lies under them (e.g. an org-fair box's fill) stays
+    intact. Tries each stroke-only q ... Q group, smallest first, and drops it
+    if exactly some of `drawings` vanish with it. Returns (page, doc), or None
+    if they can't all be removed that cleanly."""
+    tmp = pymupdf.open()
+    tmp.insert_pdf(doc, from_page=page.number, to_page=page.number)
+    tp = tmp[0]
+    xrefs = tp.get_contents()
+    stream = tp.read_contents()
+    spans = content_groups(stream)
+    if not spans or not drawings:
+        return None
+    is_target = lambda g: any(same_drawing(g, d) for d in drawings)
+
+    def apply(cut):
+        out, pos = [], 0
+        for a, b in sorted(cut):
+            out.append(stream[pos:a])
+            pos = b
+        out.append(stream[pos:])
+        tmp.update_stream(xrefs[0], b"\n".join(out))
+        for x in xrefs[1:]:
+            tmp.update_stream(x, b"")
+        return tp.get_drawings()
+
+    def gone(before, after):
+        left = list(after)
+        out = []
+        for g in before:
+            i = next((i for i, h in enumerate(left) if same_drawing(g, h)), None)
+            if i is None:
+                out.append(g)
+            else:
+                left.pop(i)
+        return out, left  # vanished, appeared
+
+    cands = [(a, b) for a, b in spans
+             if re.search(rb"\sS\s", stream[a:b]) and b"BT" not in stream[a:b] and b"Do" not in stream[a:b]]
+    cut, current = [], tp.get_drawings()
+    for a, b in sorted(cands, key=lambda s: s[1] - s[0]):
+        if any(a <= x and y <= b or x <= a and b <= y for x, y in cut):
+            continue
+        after = apply(cut + [(a, b)])
+        vanished, appeared = gone(current, after)
+        if vanished and not appeared and all(map(is_target, vanished)):
+            cut.append((a, b))
+            current = after
+    after = apply(cut)
+    vanished, appeared = gone(page.get_drawings(), after)
+    if appeared or len(vanished) != len(drawings) or not all(map(is_target, vanished)):
+        return None
+    return tp, tmp
 
 
 def find_outlined_areas(page, covers, legend):
@@ -1022,7 +1103,18 @@ def main():
             issue(fname, f"Colour #{rgb[0]:02X}{rgb[1]:02X}{rgb[2]:02X} covers ~{area:.0f} pt² but is not in the colour key.")
 
         # layers (needed for leader lines; written to disk below)
-        C = render(page, bscale)
+        # arrows switched off in the config (hiddenArrows: floor -> arrow tips)
+        # are taken out of the drawing before rendering, so what's under them
+        # (e.g. an org-fair box's fill) stays; if that fails they're masked out
+        arrows = []
+        for tip in CFG.get("hiddenArrows", {}).get(fid, []):
+            found = find_arrow(page, tip, covers)
+            if found:
+                arrows += found
+            else:
+                issue(fname, f"hiddenArrows: no arrow ends near {tip} any more (Canva layout changed?) - nothing hidden there.")
+        cut = page_without(doc, page, arrows) if arrows else None
+        C = render(cut[0] if cut else page, bscale)
         B = plan_only_render(doc, page, bscale, cover_boxes)
         B[:int(CFG["titleMaxY"] * bscale)] = 255  # the plan picture's own logo sits under the Canva title
         layer = uncomposite(C, B)
@@ -1126,16 +1218,10 @@ def main():
             MAPS_DIR / f"{fid}-labels-dark.webp", "WEBP", quality=80, method=6)
         floor_rec["chromeBoxes"] = chrome
 
-        # 7. arrows switched off in the config (hiddenArrows: floor -> arrow tips)
-        hidden = []
-        for tip in CFG.get("hiddenArrows", {}).get(fid, []):
-            segs = find_arrow(page, tip, covers)
-            if segs:
-                hidden += footprint(segs, scale, page.rect, 2.5)
-            else:
-                issue(fname, f"hiddenArrows: no arrow ends near {tip} any more (Canva layout changed?) - nothing hidden there.")
-        if hidden:
-            floor_rec["hiddenLabels"] = hidden
+        # 7. hidden arrows that couldn't be cut out of the drawing: mask them instead
+        if arrows and not cut:
+            issue(fname, "hiddenArrows: couldn't take the arrows out of the PDF drawing; masking them instead (what's under them is hidden too).")
+            floor_rec["hiddenLabels"] = footprint(arrow_segments(arrows), scale, page.rect, 2.5)
 
     # near-duplicate shades among vector fills vs key colours
     shade_check(doc, CFG)
