@@ -16,7 +16,8 @@ What it does (see README "How the import works"):
   4. Writes import/overlay.generated.json, import/import-report.md and
      review pictures in import/review/.
   5. Merges import/overlay.overrides.json (hand corrections) on top and writes
-     data/overlay.json, then runs scripts/validate.py.
+     data/overlay.json and everything drawn in Canva as tagged vectors
+     (maps/<floor>-labels.svg), then runs scripts/validate.py.
 
 Re-running never touches import/overlay.overrides.json.
 """
@@ -29,6 +30,7 @@ import re
 import subprocess
 import sys
 import unicodedata
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import cv2
@@ -227,14 +229,15 @@ def find_pins(page, covers, fill, legend):
         else:  # navy pin: needle is the lowest part
             low = max(g["parts"], key=lambda d: d["rect"].y1)
             tip = ((low["rect"].x0 + low["rect"].x1) / 2, low["rect"].y1 - 1)
-        pins.append({"tip": tip, "rect": tuple(r)})
+        seqs = [d["seqno"] for d in g["parts"]] + ([needle["seqno"]] if needle else [])
+        pins.append({"tip": tip, "rect": tuple(r), "seqs": seqs})
     return pins
 
 
 def canva_covers(page, covers):
     """Solid grey/white boxes drawn in Canva on top of the plan picture (e.g.
     hiding a closed staircase) that are actually visible on the page.
-    Returns list of (Rect, fill)."""
+    Returns list of (Rect, fill, [seqno, ...])."""
     if not covers:
         return []
     img_seq = covers[0][0]
@@ -257,22 +260,42 @@ def canva_covers(page, covers):
         patch = page_px[max(0, y0):y1, max(0, x0):x1].reshape(-1, 3)
         if not len(patch) or (np.abs(patch - np.array(f) * 255).max(1) < 20).mean() < 0.3:
             continue
-        if not any(pymupdf.Rect(r) == o[0] and tuple(f) == o[1] for o in out):
-            out.append((pymupdf.Rect(r), tuple(f)))
+        same = next((o for o in out if pymupdf.Rect(r) == o[0] and tuple(f) == o[1]), None)
+        if same:
+            same[2].append(d["seqno"])
+        else:
+            out.append((pymupdf.Rect(r), tuple(f), [d["seqno"]]))
     return out
 
 
-def plan_only_render(doc, page, s, boxes=()):
-    """The plan picture alone, rendered by MuPDF exactly as on the page, plus
-    the Canva boxes that hide parts of it (they belong to the plan, so they
-    get muted/dimmed with it)."""
+def plan_only_render(doc, page, s, C, boxes=(), clip=None):
+    """The plan picture alone as it shows on the page (C = page render at the
+    same scale), plus the Canva boxes that hide parts of it (they belong to
+    the plan, so they get muted/dimmed with it). clip: the rectangle the page
+    clips the picture to. Boxes are only painted where they show on the page
+    (Canva clips some of them), copied from C."""
     info = max(page.get_image_info(xrefs=True), key=lambda i: i["width"] * i["height"])
     tmp = pymupdf.open()
     tp = tmp.new_page(width=page.rect.width, height=page.rect.height)
     tp.insert_image(pymupdf.Rect(info["bbox"]), stream=doc.extract_image(info["xref"])["image"], keep_proportion=False)
-    for rect, fill in boxes:
-        tp.draw_rect(rect, color=None, fill=fill, overlay=True)
-    return render(tp, s)
+    B = render(tp, s)
+    if clip is not None:
+        keep = np.zeros(B.shape[:2], bool)
+        x0, y0, x1, y1 = [int(round(v * s)) for v in clip]
+        keep[max(0, y0):y1, max(0, x0):x1] = True
+        B[~keep] = 255
+    for rect, fill, _ in boxes:
+        x0, y0 = max(0, int(rect.x0 * s) - 1), max(0, int(rect.y0 * s) - 1)
+        x1, y1 = int(math.ceil(rect.x1 * s)) + 1, int(math.ceil(rect.y1 * s)) + 1
+        c = C[y0:y1, x0:x1]
+        m = (np.abs(c.astype(int) - np.array(fill) * 255).max(2) < 30).astype(np.uint8)
+        # text/pins drawn on the box: the box goes on under them (gaps up to ~3.5 pt)
+        under = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((int(3.5 * s) | 1,) * 2, np.uint8)) > 0
+        B[y0:y1, x0:x1][under] = np.round(np.array(fill) * 255).astype(np.uint8)
+        m = cv2.dilate(m, np.ones((3, 3), np.uint8)) > 0  # and its soft edge, as on the page
+        edge = m & ~under
+        B[y0:y1, x0:x1][edge] = c[edge]
+    return B
 
 
 def mute(rgb):
@@ -313,55 +336,14 @@ def darken(rgb, muted=False):
     return (out.clip(0, 1) * 255).round().astype(np.uint8)
 
 
-def outline_pins(dark, layer, rects, scale):
-    """Dark labels picture: a thin line (dark.pinOutline, pinOutlinePx wide)
-    round each printed pin, so the pale needle shows on the dark floor.
-    Only the pin's coloured pixels get it (from the light `layer`), not label
-    text that reaches into its box. The line sits behind the pin."""
-    d = CFG["dark"]
-    px = d.get("pinOutlinePx", 0)
-    if not px:
-        return dark
-    out = dark.copy()
-    col = np.array(hexrgb(d.get("pinOutline", "#ffffff")), np.float32)
-    r = int(math.ceil(px))
-    kern = _disk(r)
-    H, W = out.shape[:2]
-    for x0, y0, x1, y1 in rects:
-        a0, b0 = max(0, int(x0 * scale) - r - 2), max(0, int(y0 * scale) - r - 2)
-        a1, b1 = min(W, int(math.ceil(x1 * scale)) + r + 2), min(H, int(math.ceil(y1 * scale)) + r + 2)
-        src = layer[b0:b1, a0:a1].astype(np.float32) / 255
-        sat = src[..., :3].max(2) - src[..., :3].min(2)
-        # full strength even where Canva drew the pin see-through (the needle is ~75 %)
-        pin = ((src[..., 3] > 0.1) & (sat > 0.15)).astype(np.float32)
-        ring = cv2.dilate(pin, kern)
-        t = out[b0:b1, a0:a1].astype(np.float32) / 255
-        al = t[..., 3]
-        under = ring * (1 - al)  # outline only where the labels picture is (partly) see-through
-        a_new = al + under
-        rgb = (t[..., :3] * al[..., None] + col * under[..., None]) / np.maximum(a_new, 1e-6)[..., None]
-        out[b0:b1, a0:a1] = (np.dstack([rgb, a_new]).clip(0, 1) * 255).round().astype(np.uint8)
-    return out
-
-
-def uncomposite(C, B):
-    """Split the page render C into plan B + a transparent layer F (RGBA) so
-    that F over B == C."""
-    Cf, Bf = C.astype(np.float32) / 255, B.astype(np.float32) / 255
-    eps = 1e-6
-    up = np.where(Cf > Bf, (Cf - Bf) / np.maximum(1 - Bf, eps), 0)
-    dn = np.where(Cf < Bf, (Bf - Cf) / np.maximum(Bf, eps), 0)
-    a = np.clip(np.maximum(up, dn).max(2), 0, 1)
-    a[np.abs(C.astype(int) - B.astype(int)).max(2) < 4] = 0
-    F = np.where(a[..., None] > 0, Bf + (Cf - Bf) / np.maximum(a[..., None], eps), 0).clip(0, 1)
-    return (np.dstack([F, a]) * 255).round().astype(np.uint8)
-
-
-def leader_targets(layer, scale, label_bbox, text_boxes):
-    """Thin dark lines in the Canva layer that start at a label and point
-    somewhere (e.g. "Nap Rooms" outside the building, with lines to each
-    room). Returns [(end point, unit direction)] in pt."""
-    mask = ((layer[..., 3] > 60) & (layer[..., :3].max(2) < 120)).astype(np.uint8)
+def leader_targets(C, B, scale, label_bbox, text_boxes):
+    """Thin dark lines drawn in Canva (page render C darker than the plan
+    alone B) that start at a label and point somewhere (e.g. "Nap Rooms"
+    outside the building, with lines to each room). Returns
+    [(end point, unit direction)] in pt. (Canva draws lines as clipped
+    rectangles, so they're found in the picture, not in the vector data.)"""
+    # darker than the plan underneath (also where a line crosses a grey wall)
+    mask = (((B.astype(int) - C.astype(int)).max(2) > 20) & (C.max(2) < 120)).astype(np.uint8)
     for bb in text_boxes:  # text itself would look like short lines
         x0, y0, x1, y1 = [int(v * scale) for v in bb]
         mask[max(0, y0 - 2):y1 + 2, max(0, x0 - 2):x1 + 2] = 0
@@ -433,82 +415,6 @@ def path_points(d):
     return out
 
 
-def _paint(m, shapes, scale):
-    for kind, pts, w in shapes:
-        a = (np.array(pts) * scale).astype(np.int32)
-        if kind == "fill":
-            cv2.fillPoly(m, [a], 1)
-        else:
-            cv2.polylines(m, [a], False, 1, max(1, int(w * scale)))
-
-
-def _disc(pad, scale):
-    k = max(3, int(2 * pad * scale) | 1)
-    return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
-
-
-def footprint(shapes, scale, page_rect, pad, minus=(), minus_pad=1, always=()):
-    """Outline(s) around drawn shapes, `pad` pt wider: what to mask out of the
-    label layer to hide them. shapes = [("fill"|"line", [(x, y), ...], width)].
-    `minus`: shapes (same form) that must stay visible, cut out `minus_pad` pt
-    wider, except where they meet `always` (e.g. the box's own outline)."""
-    m = np.zeros((int(page_rect.height * scale) + 1, int(page_rect.width * scale) + 1), np.uint8)
-    _paint(m, shapes, scale)
-    m = cv2.dilate(m, _disc(pad, scale))
-    if minus:
-        k = np.zeros_like(m)
-        _paint(k, minus, scale)
-        a = np.zeros_like(m)
-        _paint(a, always, scale)
-        m[(cv2.dilate(k, _disc(minus_pad, scale)) > 0) & (a == 0)] = 0
-    cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    return [{"type": "polygon", "points": contour_to_poly(c, scale, 0.6)} for c in cnts if len(c) >= 3]
-
-
-def drawing_shapes(d):
-    """A vector drawing as footprint shapes (curves by their control polygon)."""
-    w = d.get("width") or 1
-    filled = d.get("fill") is not None
-    out = []
-    for it in d["items"]:
-        if it[0] == "re":
-            r = it[1]
-            pts = [(r.x0, r.y0), (r.x1, r.y0), (r.x1, r.y1), (r.x0, r.y1), (r.x0, r.y0)]
-        elif it[0] == "qu":
-            q = it[1]
-            pts = [tuple(q.ul), tuple(q.ur), tuple(q.lr), tuple(q.ll), tuple(q.ul)]
-        else:
-            pts = [tuple(p) for p in it[1:]]
-        out.append(("fill" if filled and len(pts) > 2 else "line", pts, w))
-    if filled:  # the whole outline too, for paths made of many small pieces
-        pts = [tuple(p) for it in d["items"] if it[0] in ("l", "c") for p in it[1:]]
-        if len(pts) > 2:
-            out.append(("fill", pts, w))
-    return out
-
-
-def things_on(page, covers, rect, skip):
-    """Visible drawings and characters touching `rect` (except `skip` drawings
-    and full-page backgrounds), as footprint shapes."""
-    R = pymupdf.Rect(rect)
-    out = []
-    for d in page.get_drawings():
-        r = d["rect"]
-        if not r.intersects(R) or r.contains(R) or d.get("fill_opacity") == 0 and d.get("color") is None:
-            continue
-        if is_hidden(d.get("seqno", 10**9), r, covers) or any(same_drawing(d, x) for x in skip):
-            continue
-        out += drawing_shapes(d)
-    for sp in page.get_texttrace():
-        if is_hidden(sp["seqno"], sp["bbox"], covers):
-            continue
-        for ch in sp["chars"]:
-            b = pymupdf.Rect(ch[3])
-            if chr(ch[0]).strip() and b.intersects(R):
-                out.append(("fill", [(b.x0, b.y0), (b.x1, b.y0), (b.x1, b.y1), (b.x0, b.y1)], 0))
-    return out
-
-
 def find_arrow(page, tip, covers, reach=8):
     """Stroked line drawings (arrow shaft + head) with an end within `reach` pt of `tip`."""
     found = []
@@ -523,87 +429,6 @@ def find_arrow(page, tip, covers, reach=8):
         if any(math.dist(q, tip) <= reach for a, b in segs for q in (a, b)):
             found.append(d)
     return found
-
-
-def arrow_segments(drawings):
-    return [("line", [tuple(it[1]), tuple(it[2])], d.get("width") or 1) for d in drawings for it in d["items"]]
-
-
-def same_drawing(a, b):
-    return all(abs(u - v) < 0.2 for u, v in zip(a["rect"], b["rect"])) and a.get("color") == b.get("color") \
-        and a.get("fill") == b.get("fill") and len(a["items"]) == len(b["items"])
-
-
-def content_groups(stream: bytes):
-    """Byte spans of all q ... Q groups (any depth) in a page's drawing code."""
-    if b"(" in stream or re.search(rb"(^|\s)BI(\s|$)", stream):
-        return None  # text strings / inline images: not worth parsing, use the mask instead
-    tok = re.compile(rb"<<|>>|<[0-9A-Fa-f\s]*>|\[|\]|/[^\s/<>\[\]()%]*|[^\s/<>\[\]()%]+")
-    stack, spans = [], []
-    for m in tok.finditer(stream):
-        if m.group() == b"q":
-            stack.append(m.start())
-        elif m.group() == b"Q":
-            if not stack:
-                return None
-            spans.append((stack.pop(), m.end()))
-    return spans if not stack else None
-
-
-def page_without(doc, page, drawings):
-    """A copy of `page` with the given vector drawings taken out of its drawing
-    code, so whatever lies under them (e.g. an org-fair box's fill) stays
-    intact. Tries each stroke-only q ... Q group, smallest first, and drops it
-    if exactly some of `drawings` vanish with it. Returns (page, doc), or None
-    if they can't all be removed that cleanly."""
-    tmp = pymupdf.open()
-    tmp.insert_pdf(doc, from_page=page.number, to_page=page.number)
-    tp = tmp[0]
-    xrefs = tp.get_contents()
-    stream = tp.read_contents()
-    spans = content_groups(stream)
-    if not spans or not drawings:
-        return None
-    is_target = lambda g: any(same_drawing(g, d) for d in drawings)
-
-    def apply(cut):
-        out, pos = [], 0
-        for a, b in sorted(cut):
-            out.append(stream[pos:a])
-            pos = b
-        out.append(stream[pos:])
-        tmp.update_stream(xrefs[0], b"\n".join(out))
-        for x in xrefs[1:]:
-            tmp.update_stream(x, b"")
-        return tp.get_drawings()
-
-    def gone(before, after):
-        left = list(after)
-        out = []
-        for g in before:
-            i = next((i for i, h in enumerate(left) if same_drawing(g, h)), None)
-            if i is None:
-                out.append(g)
-            else:
-                left.pop(i)
-        return out, left  # vanished, appeared
-
-    cands = [(a, b) for a, b in spans
-             if re.search(rb"\sS\s", stream[a:b]) and b"BT" not in stream[a:b] and b"Do" not in stream[a:b]]
-    cut, current = [], tp.get_drawings()
-    for a, b in sorted(cands, key=lambda s: s[1] - s[0]):
-        if any(a <= x and y <= b or x <= a and b <= y for x, y in cut):
-            continue
-        after = apply(cut + [(a, b)])
-        vanished, appeared = gone(current, after)
-        if vanished and not appeared and all(map(is_target, vanished)):
-            cut.append((a, b))
-            current = after
-    after = apply(cut)
-    vanished, appeared = gone(page.get_drawings(), after)
-    if appeared or len(vanished) != len(drawings) or not all(map(is_target, vanished)):
-        return None
-    return tp, tmp
 
 
 def find_outlined_areas(page, covers, legend):
@@ -624,6 +449,304 @@ def find_outlined_areas(page, covers, legend):
         if len(pts) >= 3:
             out.append({"points": [list(p) for p in pts], "rect": tuple(r), "color": c, "drawing": d})
     return out
+
+
+# ---------------------------------------------------------------- vector label layer
+# Everything Canva drew on top of the plan picture, as SVG (maps/<floor>-labels.svg).
+# PyMuPDF writes the page as SVG with one element per drawing operation, in the
+# same order as page.get_bboxlog() (checked below), so every element has a draw
+# number (= the seqno of get_drawings / get_texttrace) and a box. That is how
+# elements are left out (plan picture, things hidden behind it, Canva boxes
+# painted into the plan, hiddenArrows) and tagged for the viewer.
+SVG_NS, XLINK = "{http://www.w3.org/2000/svg}", "{http://www.w3.org/1999/xlink}"
+NUM = re.compile(r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?")
+
+
+def fnum(v, sig=5):
+    """Short number for SVG: `sig` significant digits, no leading zero."""
+    v = float(v)
+    if abs(v) < 1e-6:
+        return "0"
+    s = f"{v:.{sig}g}"
+    if "e" in s:
+        s = f"{v:.{max(0, sig - 1 - int(math.floor(math.log10(abs(v)))))}f}"
+        s = s.rstrip("0").rstrip(".") if "." in s else s
+    if s.startswith("0."):
+        s = s[1:]
+    elif s.startswith("-0."):
+        s = "-" + s[2:]
+    return s
+
+
+def fpath(d):
+    """Path data with short numbers (and a space wherever two numbers would merge)."""
+    out, prev_num = [], False
+    for tok in re.findall(r"[A-Za-z]|" + NUM.pattern, d):
+        if tok.isalpha():
+            out.append(tok)
+            prev_num = False
+        else:
+            n = fnum(tok)
+            if prev_num and not n.startswith("-"):
+                out.append(" ")
+            out.append(n)
+            prev_num = True
+    return "".join(out)
+
+
+def svg_ops(page):
+    """The page as PyMuPDF's SVG: (operations, elements by id). One operation
+    per drawing operation: {el, chain (the <g> around it), seq, kind, bbox}."""
+    root = ET.fromstring(page.get_svg_image(text_as_path=1))
+    by_id = {e.get("id"): e for e in root.iter() if e.get("id")}
+    ops = []
+
+    def walk(e, chain):
+        tag = e.tag.replace(SVG_NS, "")
+        if tag in ("defs", "clipPath", "mask"):
+            return
+        if tag in ("path", "use", "image"):
+            ops.append({"el": e, "chain": chain, "tag": tag})
+            return
+        for c in e:
+            walk(c, chain + [e] if tag == "g" else chain)
+
+    walk(root, [])
+    log = page.get_bboxlog()
+    kinds = {"use": "fill-text", "image": "fill-image"}
+    if len(log) != len(ops) or any(
+            kinds.get(o["tag"], "stroke-path" if o["el"].get("fill") == "none" else "fill-path") != k
+            for o, (k, _) in zip(ops, log)):
+        raise RuntimeError("PyMuPDF's SVG doesn't line up with the page's drawing log any more "
+                           "(new PyMuPDF version?) - the label layer can't be made.")
+    for i, (o, (k, r)) in enumerate(zip(ops, log)):
+        o.update(seq=i, kind=k, bbox=pymupdf.Rect(r))
+    return ops, by_id
+
+
+def rect_box(e):
+    """An axis-aligned clip rectangle "M x y H x V y H x Z" as a Rect, else None."""
+    if len(e) != 1 or e[0].get("transform"):
+        return None
+    m = re.fullmatch(r"M(\S+?) ?(\S+)H(\S+)V(\S+)H(\S+)Z", e[0].get("d", "").replace(",", " "))
+    if not m:
+        return None
+    try:
+        x0, y0, x1, y1, x2 = map(float, m.groups())
+    except ValueError:
+        return None
+    return pymupdf.Rect(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)) if abs(x2 - x0) < 1e-3 else None
+
+
+def clip_of(page, seq):
+    """The rectangle that drawing operation `seq` is clipped to (rectangular clips only)."""
+    ops, by_id = svg_ops(page)
+    out = pymupdf.Rect(page.rect)
+    for g in ops[seq]["chain"]:
+        m = re.fullmatch(r"url\(#([^)]+)\)", g.get("clip-path", ""))
+        r = rect_box(by_id[m.group(1)]) if m and m.group(1) in by_id else None
+        if r:
+            out &= r
+    return out
+
+
+def overlap(a, b):
+    """Share of box a (pymupdf.Rect, lines widened a little) that lies in b."""
+    a = pymupdf.Rect(a) + (-0.5, -0.5, 0.5, 0.5)
+    return (a & pymupdf.Rect(b)).get_area() / max(a.get_area(), 1e-6)
+
+
+def box_rect(b):
+    return pymupdf.Rect(b[0], b[1], b[0] + b[2], b[1] + b[3])
+
+
+def label_layer(page, fid, plan_seq, covers, drop, sel, chrome, pins, items):
+    """SVG text of the label layer for one floor.
+    plan_seq: draw numbers of the plan picture; covers: covering_images();
+    drop: draw numbers left out (Canva boxes painted into the plan, hidden arrows);
+    sel: {draw number: item id} drawn only while that item is selected (Org fair boxes);
+    chrome: [x, y, w, h] title/legend areas; pins: [[draw numbers]] of printed
+    meeting-point pins (a white hairline round them in dark mode);
+    items: the final items of this floor (their labelBoxes tag what belongs to them)."""
+    ops, by_id = svg_ops(page)
+    first_plan = min(plan_seq) if plan_seq else 0
+    page_area = page.rect.width * page.rect.height
+    keep = []
+    for o in ops:
+        s, bb = o["seq"], o["bbox"]
+        if s in plan_seq or s in drop or is_hidden(s, bb, covers):
+            continue
+        if s < first_plan and bb.get_area() > 0.5 * page_area:
+            continue  # white paper under the plan picture
+        keep.append(o)
+
+    # which item(s) each element belongs to
+    boxes = [(it["id"], [box_rect(b) for b in it.get("labelBoxes", [])]) for it in items]
+    chrome_r = [box_rect(b) for b in chrome]
+
+    def tag(o):
+        if o["seq"] in sel:
+            return ("sel", sel[o["seq"]])
+        if any(overlap(o["bbox"], c) >= 0.5 for c in chrome_r):
+            return ("chrome", "")
+        ids = []
+        for iid, rs in boxes:
+            if any(overlap(o["bbox"], r) >= 0.5 for r in rs) or \
+                    (o["kind"] == "stroke-path" and sum(1 for r in rs if (o["bbox"] + (-1, -1, 1, 1)).intersects(r)) >= 2):
+                ids.append(iid)  # inside its label/pin box, or a line joining two of its boxes
+        return ("items", " ".join(sorted(ids)))
+
+    # colours -> classes, so the viewer can grey them and dark mode can recolour them
+    palette = {}
+
+    def colour_class(prefix, col):
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", col or ""):
+            return None
+        key = col.lower()
+        palette.setdefault(key, len(palette))
+        return f"{prefix}{palette[key]}"
+
+    used = {}  # referenced defs: original id -> new id
+
+    def ref(i):
+        if i not in used:
+            used[i] = f"f{fid}-{len(used)}"
+            for v in by_id[i].iter():  # what the def itself refers to
+                for a in v.attrib.values():
+                    for j in re.findall(r"url\(#([^)]+)\)", a) + ([a[1:]] if a.startswith("#") else []):
+                        if j in by_id:
+                            ref(j)
+        return used[i]
+
+    def attrs(e, leaf=False, extra=None):
+        out, cls = [], []
+        items = list(e.attrib.items())
+        if leaf and "fill" not in e.attrib:
+            items.append(("fill", "#000000"))  # SVG's (and PDF's) default: black
+        for k, v in items:
+            k = k.replace(XLINK, "")
+            if k.startswith("{") or k in ("id", "data-text"):
+                continue
+            if leaf and k in ("fill", "stroke") and v != "none":
+                c = colour_class("f" if k == "fill" else "s", v)
+                if c:
+                    cls.append(c)
+                    continue
+            if k == "d":
+                v = fpath(v)
+            elif k in ("transform", "x", "y", "width", "height", "stroke-width", "stroke-miterlimit", "opacity",
+                       "fill-opacity", "stroke-opacity", "stroke-dashoffset", "stroke-dasharray"):
+                v = NUM.sub(lambda m: fnum(m.group()), v)
+            elif k == "href" and v.startswith("data:"):
+                v = re.sub(r"\s", "", v)
+            elif k == "href" and v.startswith("#"):
+                v = "#" + ref(v[1:])
+            elif "url(#" in v:
+                v = re.sub(r"url\(#([^)]+)\)", lambda m: f"url(#{ref(m.group(1))})", v)
+            out.append((k, v))
+        out += list((extra or {}).items())
+        if cls:
+            out.append(("class", " ".join(cls)))
+        return "".join(f' {k}="{html_attr(v)}"' for k, v in out)
+
+    def needed(g, bb):
+        """Is this <g> around an element doing anything? Clip rectangles that
+        hold the whole element are left out (Canva nests seven of them)."""
+        if set(g.attrib) - {"clip-path"}:
+            return True
+        m = re.fullmatch(r"url\(#([^)]+)\)", g.get("clip-path", ""))
+        r = rect_box(by_id[m.group(1)]) if m and m.group(1) in by_id else None
+        return not (r and (r + (-1, -1, 1, 1)).contains(bb))
+
+    pin_of = {s: n for n, p in enumerate(pins) for s in p}
+    pin_ops = {}
+    for o in keep:
+        if o["seq"] in pin_of:
+            pin_ops.setdefault(pin_of[o["seq"]], []).append(o)
+    halo_w = CFG["dark"].get("pinOutlinePt", 0)
+
+    body, open_tag, open_chain = [], None, []
+
+    def close_chain(n):
+        while len(open_chain) > n:
+            open_chain.pop()
+            body.append("</g>")
+
+    for o in keep:
+        t = tag(o)
+        chain = [g for g in o["chain"] if needed(g, o["bbox"])]
+        if t != open_tag:
+            close_chain(0)
+            if open_tag is not None:
+                body.append("</g>")
+            kind, val = t
+            body.append({"sel": f'<g data-sel="{val}">', "chrome": '<g class="chrome">',
+                         "items": f'<g data-i="{val}">' if val else "<g>"}[kind])
+            open_tag = t
+        n = 0
+        while n < len(open_chain) and n < len(chain) and open_chain[n] is chain[n]:
+            n += 1
+        close_chain(n)
+        for g in chain[n:]:
+            body.append(f"<g{attrs(g)}>")
+            open_chain.append(g)
+        p = pin_of.get(o["seq"])
+        if p is not None and halo_w and pin_ops[p][0] is o:
+            # dark mode: a hairline behind the whole pin, so its pale needle shows on the dark floor
+            for q in pin_ops[p]:
+                if q["tag"] != "path":
+                    continue
+                tr = q["el"].get("transform", "")
+                m = [float(v) for v in NUM.findall(tr)] if tr.startswith("matrix") else [1, 0, 0, 1]
+                k = math.sqrt(abs(m[0] * m[3] - m[1] * m[2])) or 1
+                tr = NUM.sub(lambda x: fnum(x.group()), tr)
+                body.append('<path class="h"' + (f' transform="{tr}"' if tr else "")
+                            + f' d="{fpath(q["el"].get("d", ""))}" stroke-width="{fnum(2 * halo_w / k)}" stroke-linejoin="round"/>')
+        tagname = o["tag"]
+        if tagname == "image":
+            body.append(f"<image{attrs(o['el'])}/>")
+        else:
+            body.append(f"<{tagname}{attrs(o['el'], leaf=True)}/>")
+    close_chain(0)
+    if open_tag is not None:
+        body.append("</g>")
+
+    # defs (in the order they first appear in PyMuPDF's file, so re-runs give the same file)
+    order = {e.get("id"): n for n, e in enumerate(by_id.values())}
+
+    def ser(e):
+        tag = e.tag.replace(SVG_NS, "")
+        a = attrs(e)
+        if e.get("id") in used:
+            a = f' id="{used[e.get("id")]}"' + a
+        kids = "".join(ser(c) for c in e)
+        return f"<{tag}{a}>{kids}</{tag}>" if kids else f"<{tag}{a}/>"
+
+    defs, done = [], set()
+    while len(done) < len(used):  # serialising can add references (masks -> images)
+        for i in sorted(set(used) - done, key=lambda i: order[i]):
+            done.add(i)
+            defs.append((order[i], ser(by_id[i])))
+    defs = "".join(d for _, d in sorted(defs))
+
+    # colours: as printed, greyed (others while something is selected), and both for dark mode
+    luma = np.array([0.299, 0.587, 0.114])
+    hx = lambda a: "#" + "".join(f"{int(round(v)):02x}" for v in np.clip(a, 0, 255))
+    css = [f".vl-{fid} .h{{fill:{CFG['dark'].get('pinOutline', '#ffffff')};stroke:{CFG['dark'].get('pinOutline', '#ffffff')}}}"]
+    for col, n in palette.items():
+        rgb = hexrgb(col) * 255
+        drk = darken(np.array([[np.round(rgb)]], np.uint8))[0, 0].astype(float)
+        for mode, c in (("", rgb), (".dark ", drk)):
+            for state, v in (("", c), (".off ", np.full(3, (c * luma).sum()))):
+                css.append(f"{mode}.vl-{fid} {state}.f{n}{{fill:{hx(v)}}}{mode}.vl-{fid} {state}.s{n}{{stroke:{hx(v)}}}")
+    W, H = fnum(page.rect.width), fnum(page.rect.height)
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">\n'
+            f"<style>{''.join(css)}</style>\n<defs>{defs}</defs>\n"
+            f'<g class="vl-{fid}">\n' + "\n".join(body) + "\n</g>\n</svg>\n")
+
+
+def html_attr(v):
+    return str(v).replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
 
 
 # ---------------------------------------------------------------- raster work
@@ -957,6 +1080,7 @@ def main():
     scale = CFG["rasterScale"]
 
     floors, items, raster_meta, stats = [], [], {}, {}
+    layers_todo = []
     used_ids: set[str] = set()
 
     def new_id(base: str) -> str:
@@ -992,11 +1116,10 @@ def main():
             **({"color": fl["color"]} if fl.get("color") else {}),
             "background": f"maps/{fid}.webp",
             "backgroundHighlight": f"maps/{fid}-full.webp",
-            "labels": f"maps/{fid}-labels.webp",
+            "labels": f"maps/{fid}-labels.svg",
             "dark": {
                 "background": f"maps/{fid}-dark.webp",
                 "backgroundHighlight": f"maps/{fid}-full-dark.webp",
-                "labels": f"maps/{fid}-labels-dark.webp",
             },
             "width": r1(W), "height": r1(H),
         })
@@ -1005,9 +1128,9 @@ def main():
 
         # 2. vector data
         covers = covering_images(page)
-        # arrows switched off in the config (hiddenArrows: floor -> arrow tips);
-        # taken out of the drawing before rendering (step 6), so what's under them
-        # (e.g. an org-fair box's fill) stays; if that fails they're masked out
+        sel = {}  # draw number -> item id: printed only while that item is selected
+        # arrows switched off in the config (hiddenArrows: floor -> arrow tips):
+        # left out of the label layer (step 6)
         arrows = []
         for tip in CFG.get("hiddenArrows", {}).get(fid, []):
             found = find_arrow(page, tip, covers)
@@ -1110,12 +1233,13 @@ def main():
                 "labelBoxes": [xywh(area["rect"], 4), xywh(b["bbox"])],
             })
             if c in CFG.get("boxesOnlyWhenSelected", []):
-                # the printed box itself is only shown while its category/item is selected;
-                # whatever else touches it (an arrow tip, a line, text) stays visible
-                skip = arrows + [o["drawing"] for o in outlined]  # other boxes have their own
-                keep = things_on(page, covers, pymupdf.Rect(area["rect"]) + (-6, -6, 6, 6), skip)
-                ring = [("line", [tuple(p) for p in pts + pts[:1]], (area["drawing"].get("width") or 1) + 1.5)]
-                items[-1]["labelsWhenSelected"] = footprint([("fill", pts, 0)], scale, page.rect, 4, keep, always=ring)
+                # the printed box (its outline and its see-through fill, which Canva
+                # writes as a picture of the same size) is only shown while selected
+                ar = pymupdf.Rect(area["rect"])
+                for k, r in enumerate(page.get_bboxlog()):
+                    rr = pymupdf.Rect(r[1])
+                    if k == area["drawing"]["seqno"] or r[0] in ("fill-image", "fill-path") and                             max(abs(a - b) for a, b in zip(rr, ar)) < 3:
+                        sel[k] = items[-1]["id"]
             if len(fair_blocks) > 1:
                 issue(fname, f"Outlined box at {[round(v) for v in area['rect']]} assigned to \"{b['text']}\" (nearest of several fair labels).")
             st[cats[c]["label"] + " areas"] = st.get(cats[c]["label"] + " areas", 0) + 1
@@ -1142,7 +1266,7 @@ def main():
 
         # 3. raster colour areas
         cover_boxes = canva_covers(page, covers)
-        cover_rects = [r for r, _ in cover_boxes]
+        cover_rects = [r for r, _, _ in cover_boxes]
         for key in CFG["rasterKey"]:
             regs, small = colour_regions(plan, key["rgb"], key["tolerance"], scale, 40, exclude)
             regs.sort(key=lambda r: (r["pin"][1], r["pin"][0]))
@@ -1177,13 +1301,13 @@ def main():
         for rgb, area in unkeyed_colours(plan, scale, CFG["rasterKey"] + CFG["ignoreRaster"], exclude):
             issue(fname, f"Colour #{rgb[0]:02X}{rgb[1]:02X}{rgb[2]:02X} covers ~{area:.0f} pt² but is not in the colour key.")
 
-        # layers (needed for leader lines; written to disk below)
-        # (hidden arrows: see step 2)
-        cut = page_without(doc, page, arrows) if arrows else None
-        C = render(cut[0] if cut else page, bscale)
-        B = plan_only_render(doc, page, bscale, cover_boxes)
-        B[:int(CFG["titleMaxY"] * bscale)] = 255  # the plan picture's own logo sits under the Canva title
-        layer = uncomposite(C, B)
+        # the plan picture alone (with Canva's cover boxes). Above titleMaxY only
+        # what shows on the page is kept: the plan's own logo there is covered
+        # by Canva (and the label layer has no plan pixels to fade with the title)
+        C = render(page, bscale)
+        B = plan_only_render(doc, page, bscale, C, cover_boxes, clip_of(page, covers[0][0]) if covers else None)
+        ty = int(CFG["titleMaxY"] * bscale)
+        B[:ty][np.abs(C[:ty].astype(int) - B[:ty].astype(int)).max(2) > 8] = 255
         # per character, so a rotated label doesn't blank out a whole upright box
         text_boxes = [ch["bbox"] for blk in page.get_text("rawdict")["blocks"] if blk["type"] == 0
                       for ln in blk["lines"] for sp in ln["spans"] for ch in sp["chars"] if ch["c"].strip()]
@@ -1218,7 +1342,7 @@ def main():
             elif why == "label is outside the building":
                 # label outside the building: follow its leader lines to the rooms
                 polys = []
-                targets = leader_targets(layer, bscale, b["bbox"], text_boxes)
+                targets = leader_targets(C, B, bscale, b["bbox"], text_boxes)
                 for (ex, ey), (ux, uy) in targets:
                     def known(q):
                         return any(math.dist(np.mean(q, 0), np.mean(o, 0)) < 5 for o in polys)
@@ -1270,24 +1394,19 @@ def main():
                 dest = set(best.get("connects", [])) | set(re.findall(r"\d", b.get("text", "")))
                 best["connects"] = sorted(dest - {fid})
 
-        # 6. layers: muted plan, full-colour plan, transparent Canva layer
+        # 6. layers: muted plan, full-colour plan (the Canva layer is written after the overrides are merged)
         Image.fromarray(mute(B)).save(MAPS_DIR / f"{fid}.webp", "WEBP", quality=74, method=6)
         Image.fromarray(B).save(MAPS_DIR / f"{fid}-full.webp", "WEBP", quality=74, method=6)
-        Image.fromarray(layer, "RGBA").save(
-            MAPS_DIR / f"{fid}-labels.webp", "WEBP", quality=80, method=6)
-        # the same three for dark mode (labels keep their transparency)
+        # the same two for dark mode
         Image.fromarray(darken(B, muted=True)).save(MAPS_DIR / f"{fid}-dark.webp", "WEBP", quality=74, method=6)
         Image.fromarray(darken(B)).save(MAPS_DIR / f"{fid}-full-dark.webp", "WEBP", quality=74, method=6)
-        dark_layer = np.dstack([darken(layer[..., :3]), layer[..., 3]])
-        dark_layer = outline_pins(dark_layer, layer, [p["rect"] for p in mpins], bscale)
-        Image.fromarray(dark_layer, "RGBA").save(
-            MAPS_DIR / f"{fid}-labels-dark.webp", "WEBP", quality=80, method=6)
-        floor_rec["chromeBoxes"] = chrome
-
-        # 7. hidden arrows that couldn't be cut out of the drawing: mask them instead
-        if arrows and not cut:
-            issue(fname, "hiddenArrows: couldn't take the arrows out of the PDF drawing; masking them instead (what's under them is hidden too).")
-            floor_rec["hiddenLabels"] = footprint(arrow_segments(arrows), scale, page.rect, 2.5)
+        # what the label layer needs (written after the overrides are merged)
+        layers_todo.append({
+            "page": page, "fid": fid,
+            "plan_seq": {cs for cs, _ in covers}, "covers": covers,
+            "drop": {d["seqno"] for d in arrows} | {q for _, _, seqs in cover_boxes for q in seqs},
+            "sel": sel, "chrome": chrome, "pins": [p["seqs"] for p in mpins],
+        })
 
     # near-duplicate shades among vector fills vs key colours
     shade_check(doc, CFG)
@@ -1306,6 +1425,13 @@ def main():
     (RASTER_DIR / "rasters.json").write_text(json.dumps(raster_meta, indent=1) + "\n", encoding="utf-8")
 
     final, merge_notes = merge(generated)
+    # 7. the Canva layer as SVG, tagged with the final items (overrides can add labelBoxes)
+    for L in layers_todo:
+        here = [it for it in final["items"] if it["floor"] == L["fid"]]
+        sel = {k: v for k, v in L["sel"].items() if any(it["id"] == v for it in here)}
+        svg = label_layer(L["page"], L["fid"], L["plan_seq"], L["covers"], L["drop"], sel,
+                          L["chrome"], L["pins"], here)
+        (MAPS_DIR / f"{L['fid']}-labels.svg").write_text(svg, encoding="utf-8", newline="\n")
     OUT_FINAL.parent.mkdir(exist_ok=True)
     OUT_FINAL.write_text(json.dumps(final, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     for n in merge_notes:

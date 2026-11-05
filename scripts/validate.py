@@ -10,6 +10,7 @@ inside the floor, and that background files exist.
 Exit code 0 = OK, 1 = problems found.
 """
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -84,6 +85,13 @@ def main() -> int:
     for c in data["categories"]:
         if c["id"] not in used:
             warnings.append(f"category '{c['id']}' has no items (its chip will show 'not on any floor')")
+    # vector labels: things printed only for a selection must belong to an item that exists
+    ids = {it["id"] for it in data["items"]}
+    for f in data["floors"]:
+        lab = site_root / f.get("labels", "")
+        if f.get("labels", "").endswith(".svg") and lab.exists():
+            for iid in sorted(set(re.findall(r'data-sel="([^"]+)"', lab.read_text(encoding="utf-8"))) - ids):
+                warnings.append(f"floor '{f['id']}': {f['labels']} has a box shown only when '{iid}' is selected, but there is no such item (never shown)")
     return report(path, errors, warnings)
 
 

@@ -93,7 +93,7 @@
   const HINT_MS = 5000; // 0.5 s wait + 3 rings of 1.5 s
   try { dotSeen = localStorage.getItem('venueMap.dotSeen') === '1'; } catch (e) { /* private mode */ }
   const svg = $('svg'), mapEl = $('map');
-  let vp, bgLayer, greyLayer, fullLayer, dimRect, maskG, hlLayer, labelGreyLayer, labelLayer, traceLayer, clipG, labMaskG, labGreyMaskG, markerLayer;
+  let vp, bgLayer, greyLayer, fullLayer, dimRect, maskG, hlLayer, labelLayer, traceLayer, clipG, markerLayer;
   // ?outline=1 draws the old outline around highlighted areas (for comparing)
   const OUTLINE = new URLSearchParams(location.search).get('outline') === '1';
   const bgs = {};
@@ -177,25 +177,21 @@
   // Layers, bottom to top: background (muted when a full-colour copy exists),
   // grey copy of it (shown while something is selected), full-colour copy
   // clipped to the selection, light veil, highlight tint, printed labels
-  // (a grey faded copy for everything else + the colour copy for the
-  // selection, both masked per label), then screen-space markers.
+  // (vector: each part greyed/faded/hidden on its own, see renderLabels),
+  // then screen-space markers.
   function buildSvg() {
     const defs = el('defs', {}, svg);
     const mask = el('mask', { id: 'hole', maskUnits: 'userSpaceOnUse' }, defs);
     maskG = el('g', {}, mask);
     clipG = el('clipPath', { id: 'sel', clipPathUnits: 'userSpaceOnUse' }, defs);
-    const lm = el('mask', { id: 'lab', maskUnits: 'userSpaceOnUse' }, defs);
-    labMaskG = el('g', {}, lm);
-    const lgm = el('mask', { id: 'labg', maskUnits: 'userSpaceOnUse' }, defs);
-    labGreyMaskG = el('g', {}, lgm);
     vp = el('g', {}, svg);
     bgLayer = el('g', {}, vp);
     greyLayer = el('g', { class: 'grey-layer' }, vp);
     fullLayer = el('g', { 'clip-path': 'url(#sel)' }, vp);
     dimRect = el('rect', { class: 'dim', mask: 'url(#hole)' }, vp);
     hlLayer = el('g', {}, vp);
-    labelGreyLayer = el('g', { mask: 'url(#labg)' }, vp);
-    labelLayer = el('g', { mask: 'url(#lab)' }, vp);
+    labelLayer = el('g', { class: 'label-layer' }, vp);
+    svg.classList.toggle('dark', mapDark);
     traceLayer = el('g', { class: 'trace-layer' }, vp); // outline drawn by the card's round icon
     markerLayer = el('g', {}, svg); // screen space: markers keep their size when zooming
   }
@@ -204,19 +200,48 @@
   const layerImg = (f, href, parent) => el('image', { x: 0, y: 0, width: f.width, height: f.height, preserveAspectRatio: 'none', href }, parent);
   function showOnly(store, id) { for (const [fid, im] of Object.entries(store)) im.style.display = fid === id ? '' : 'none'; }
   function ensureLayers(f) {
-    if (f.labels && !labs[f.id]) labs[f.id] = layerImg(f, pic(f, 'labels'), labelLayer);
+    if (f.labels && !labs[f.id]) labs[f.id] = /\.svg([?#]|$)/i.test(f.labels) ? vectorLabels(f) : layerImg(f, pic(f, 'labels'), labelLayer);
     showOnly(labs, f.id);
     showOnly(fulls, f.id);
     showOnly(greyBgs, f.id);
-    showOnly(greyLabs, f.id);
   }
 
-  // Grey copies of the plan and the labels, made in the browser (no extra
-  // download): while something is selected, everything else loses its colour
-  // instead of being darkened. Made once per floor, when the browser is idle.
-  const greyBgs = {}, greyLabs = {}, greyBusy = {};
+  // Printed labels as vectors (maps/<floor>-labels.svg, made by the import).
+  // The file's content goes into the map itself, so it stays sharp at any
+  // zoom and each part can be greyed, faded or hidden on its own. The groups
+  // inside its top-level <g> are tagged: data-i = ids of the items whose
+  // label/pin it is, data-sel = shown only while that item is selected (Org
+  // fair boxes), class="chrome" = title and legend. Colours are classes; the
+  // file's own <style> has their grey (.off) and dark-mode (svg.dark) versions.
+  function vectorLabels(f) {
+    const g = el('g', {}, labelLayer);
+    fetch(f.labels).then((r) => { if (!r.ok) throw new Error(r.status); return r.text(); }).then((txt) => {
+      const root = new DOMParser().parseFromString(txt, 'image/svg+xml').documentElement;
+      if (root.localName !== 'svg') throw new Error('not an SVG');
+      for (const n of [...root.childNodes]) g.appendChild(document.importNode(n, true));
+      const runs = [];
+      for (const top of g.children) {
+        if (top.localName !== 'g') continue;
+        for (const r of top.children) {
+          if (r.localName !== 'g') continue;
+          r._ids = (r.getAttribute('data-i') || '').split(' ').filter(Boolean);
+          r._sel = r.getAttribute('data-sel');
+          r._chrome = r.classList.contains('chrome');
+          runs.push(r);
+        }
+      }
+      g._runs = runs;
+      if (f.id === S.floor) render({ noUrl: true });
+    }).catch((e) => console.error('labels', f.labels, e));
+    return g;
+  }
+
+  // Grey copies of the plan, made in the browser (no extra download): while
+  // something is selected, everything else loses its colour instead of being
+  // darkened. Made once per floor, when the browser is idle.
+  const greyBgs = {}, greyBusy = {};
   let greyGen = 0; // bumped when the theme changes: late copies of the old theme are dropped
-  const GREY_BG_SAT = 0.12, GREY_LAB_SAT = 0;
+  const GREY_BG_SAT = 0.12;
   function greyed(src, sat) {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -257,7 +282,6 @@
     idle(() => {
       if (gen !== greyGen) return;
       greyed(pic(f, 'background'), GREY_BG_SAT).then(done(greyBgs, greyLayer)).catch(() => {});
-      if (f.labels) greyed(pic(f, 'labels'), GREY_LAB_SAT).then(done(greyLabs, labelGreyLayer)).catch(() => {});
     });
   }
   // the full-colour copy is only fetched once something on that floor is highlighted
@@ -280,18 +304,17 @@
     syncThemeBtn();
     if (dark === mapDark) return;
     mapDark = dark;
+    svg.classList.toggle('dark', dark); // vector labels recolour through CSS
     if (!S.ready && !S.floors.length) return;
     for (const [store, key] of [[bgs, 'background'], [fulls, 'backgroundHighlight'], [labs, 'labels']]) {
-      for (const [fid, im] of Object.entries(store)) im.setAttribute('href', pic(S.floorById[fid], key));
+      for (const [fid, im] of Object.entries(store)) if (im.localName === 'image') im.setAttribute('href', pic(S.floorById[fid], key));
     }
     greyGen++;
-    for (const store of [greyBgs, greyLabs]) {
-      for (const [fid, im] of Object.entries(store)) {
-        const url = im.getAttribute('href');
-        im.remove();
-        if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
-        delete store[fid];
-      }
+    for (const [fid, im] of Object.entries(greyBgs)) {
+      const url = im.getAttribute('href');
+      im.remove();
+      if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
+      delete greyBgs[fid];
     }
     for (const fid of Object.keys(greyBusy)) delete greyBusy[fid];
     const f = S.floorById[S.floor];
@@ -350,10 +373,8 @@
     if (S.item && S.itemById[S.item].floor !== id) S.item = null;
     dimRect.setAttribute('width', f.width); dimRect.setAttribute('height', f.height);
     prepareGrey(f);
-    for (const sel of ['#hole', '#lab', '#labg']) {
-      const m = svg.querySelector(sel);
-      m.setAttribute('x', 0); m.setAttribute('y', 0); m.setAttribute('width', f.width); m.setAttribute('height', f.height);
-    }
+    const hole = svg.querySelector('#hole');
+    hole.setAttribute('x', 0); hole.setAttribute('y', 0); hole.setAttribute('width', f.width); hole.setAttribute('height', f.height);
     if (changed || opts.refit) fit(true);
     // back on the "You are here" floor: show the tag again for a moment
     if (changed && S.ready && S.here && S.here.floor === id) { S.hereAt = performance.now(); setTimeout(placeMarkers, HERE_TAG_MS + 50); }
@@ -552,7 +573,7 @@
       }
     }
     S.hl = hl;
-    renderLabelMask(f, hl, dimOn);
+    renderLabels(f, hl, dimOn);
     $('labelsBtn').setAttribute('aria-pressed', S.allLabels);
     const lt = S.allLabels ? 'Fade labels of other things' : 'Show all labels as printed';
     $('labelsBtn').title = lt; $('labelsBtn').setAttribute('aria-label', lt);
@@ -566,44 +587,27 @@
     if (!opts.noUrl && S.ready) updateUrl();
   }
 
-  // Which printed labels show, and how. Mask luminance = opacity.
-  // #lab masks the colour copy, #labg the grey copy (only while selecting).
-  const FADED = '#4d4d4d'; // ~30 %: colour labels faded (no grey copy yet)
-  const GREY = '#8c8c8c'; // ~55 %: grey copy of the other labels while selecting
-  const CHROME = '#333'; // ~20 %: title, legend
-  function renderLabelMask(f, hl, selecting) {
-    labMaskG.innerHTML = '';
-    labGreyMaskG.innerHTML = '';
-    const draw = (g, s, fill) => {
-      if (Array.isArray(s)) return el('rect', { x: s[0], y: s[1], width: s[2], height: s[3], fill }, g);
-      const p = shapePoints(s);
-      if (p) el('polygon', { points: p.map((q) => q.join(',')).join(' '), fill }, g);
-    };
-    const all = [0, 0, f.width, f.height];
-    const greyOn = selecting && !S.allLabels && !!greyLabs[f.id];
-    labelGreyLayer.style.display = greyOn ? '' : 'none';
-    if (S.allLabels) { draw(labMaskG, all, '#fff'); return; }
-    const masks = greyOn ? [labMaskG, labGreyMaskG] : [labMaskG];
-    // base
-    draw(labMaskG, all, !selecting ? '#fff' : greyOn ? '#000' : FADED);
-    if (greyOn) draw(labGreyMaskG, all, GREY);
-    for (const b of f.chromeBoxes || []) {
-      draw(labMaskG, b, greyOn ? '#000' : CHROME);
-      if (greyOn) draw(labGreyMaskG, b, CHROME);
+  // Which printed labels show, and how (classes: style.css, colours: the SVG's
+  // own <style>). While something is selected, everything that isn't one of
+  // its labels turns grey and faded (.off); the title and legend are always
+  // faint (.faint); things printed only for a selection (Org fair boxes) are
+  // hidden otherwise. "Aa" (S.allLabels) shows everything exactly as printed.
+  function renderLabels(f, hl, selecting) {
+    const lab = labs[f.id];
+    if (!lab) return;
+    const all = S.allLabels;
+    if (!lab._runs) {
+      // a picture of the labels (not made by this import): fade it as a whole
+      if (lab.localName === 'image') lab.style.opacity = all || !selecting ? 1 : 0.55;
+      return;
     }
-    // the selection in full colour
-    const on = new Set(selecting ? hl : []);
-    for (const it of on) {
-      for (const b of it.labelBoxes || []) { draw(labMaskG, b, '#fff'); if (greyOn) draw(labGreyMaskG, b, '#000'); }
-      for (const s of it.labelsWhenSelected || []) { draw(labMaskG, s, '#fff'); if (greyOn) draw(labGreyMaskG, s, '#000'); }
+    const on = new Set(selecting ? hl.map((i) => i.id) : []);
+    for (const r of lab._runs) {
+      const mine = r._sel ? on.has(r._sel) : r._ids.some((id) => on.has(id));
+      r.classList.toggle('hidden', !all && !!r._sel && !mine);
+      r.classList.toggle('off', !all && selecting && !mine);
+      r.classList.toggle('faint', !all && r._chrome);
     }
-    // things printed only for a selection, and things never shown
-    for (const it of S.items) {
-      if (it.floor !== f.id || on.has(it) || !it.labelsWhenSelected) continue;
-      for (const s of it.labelsWhenSelected) for (const g of masks) draw(g, s, '#000');
-    }
-    for (const s of f.hiddenLabels || []) for (const g of masks) draw(g, s, '#000');
-    for (const b of f.fixedBoxes || []) draw(labMaskG, b, '#fff');
   }
 
   // where a marker's tip goes: top middle of the printed label box that

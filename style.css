@@ -161,6 +161,14 @@ svg { display: block; }
   .trace.quick, .trace-halo.quick { animation: trace-fade .35s ease-in .85s forwards; }
 }
 .grey-layer { transition: opacity .18s; pointer-events: none; }
+/* printed labels (maps/<floor>-labels.svg, see renderLabels in app.js). Grey
+   colours for .off and dark-mode colours (#svg.dark) are in each SVG's own <style>. */
+.label-layer { pointer-events: none; }
+.label-layer .off { opacity: .55; }
+.label-layer .faint { opacity: .2; }
+.label-layer .hidden { display: none; }
+.label-layer .h { display: none; } /* hairline round printed pins: dark mode only */
+#svg.dark .label-layer .h { display: inline; }
 .marker .bg { stroke: #fff; stroke-width: 2.5; filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
 .marker .glyph { fill: #fff; }
 .marker text { fill: #fff; font: 700 9px system-ui, sans-serif; text-anchor: middle; dominant-baseline: central; }

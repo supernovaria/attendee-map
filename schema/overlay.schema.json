@@ -68,7 +68,7 @@
           "labels": {
             "type": "string",
             "pattern": "\\.(svg|png|webp|jpg|jpeg)$",
-            "description": "Optional. Transparent image of printed labels/pins drawn above everything. Parts not relevant to the selection fade out (see item.labelBoxes)."
+            "description": "Optional. Printed labels/pins drawn above everything. Best as an SVG whose top-level <g> holds groups tagged data-i=\"<item ids>\" (an item's own label/pin), data-sel=\"<item id>\" (shown only while that item is selected) or class=\"chrome\" (title, legend: always faint), with colours as classes the file's own <style> gives grey (.off) and dark (svg.dark) versions; see README. While something is selected, the other groups turn grey and faded. A picture (png/webp/jpg) also works: it fades as a whole while something is selected."
           },
           "dark": {
             "type": "object",
@@ -77,22 +77,8 @@
             "properties": {
               "background": { "type": "string", "pattern": "\\.(svg|png|webp|jpg|jpeg)$" },
               "backgroundHighlight": { "type": "string", "pattern": "\\.(svg|png|webp|jpg|jpeg)$" },
-              "labels": { "type": "string", "pattern": "\\.(svg|png|webp|jpg|jpeg)$" }
+              "labels": { "type": "string", "pattern": "\\.(png|webp|jpg|jpeg)$", "description": "Only for a picture of the labels; an SVG labels file recolours itself (svg.dark)." }
             }
-          },
-          "chromeBoxes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/box"
-            },
-            "description": "Optional. Parts of the labels image that are page decoration (title, legend): faded unless 'All labels' is on."
-          },
-          "fixedBoxes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/box"
-            },
-            "description": "Optional. Parts of the labels image that are always fully shown (e.g. boxes hiding closed areas)."
           },
           "view": {
             "$ref": "#/$defs/box",
@@ -102,13 +88,6 @@
             "type": "string",
             "pattern": "^#[0-9A-Fa-f]{6}$",
             "description": "Optional. Floor colour: bar next to that floor's rooms in the room list and search results."
-          },
-          "hiddenLabels": {
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/shape"
-            },
-            "description": "Areas of the labels image that are never shown (unless the viewer asks for all labels), e.g. arrows not wanted on screen."
           }
         }
       }
@@ -212,13 +191,6 @@
               "$ref": "#/$defs/shape"
             },
             "description": "Optional, instead of or in addition to shape: several areas for one item (e.g. 'Nap Rooms' = four rooms)."
-          },
-          "labelsWhenSelected": {
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/shape"
-            },
-            "description": "Areas of the labels image shown only while this item (or its category) is highlighted, e.g. a printed box around a fair area."
           },
           "links": {
             "type": "array",

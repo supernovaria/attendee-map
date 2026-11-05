@@ -1,6 +1,6 @@
 {
  "schemaVersion": 1,
- "updated": "2026-11-05T04:57:37+01:00",
+ "updated": "2026-11-05T05:55:49+01:00",
  "floors": [
   {
    "id": "0",
@@ -10,34 +10,13 @@
    "color": "#D7263D",
    "background": "maps/0.webp",
    "backgroundHighlight": "maps/0-full.webp",
-   "labels": "maps/0-labels.webp",
+   "labels": "maps/0-labels.svg",
    "dark": {
     "background": "maps/0-dark.webp",
-    "backgroundHighlight": "maps/0-full-dark.webp",
-    "labels": "maps/0-labels-dark.webp"
+    "backgroundHighlight": "maps/0-full-dark.webp"
    },
    "width": 843.0,
-   "height": 1191.0,
-   "chromeBoxes": [
-    [
-     141.6,
-     26.2,
-     563.6,
-     123.2
-    ],
-    [
-     77.5,
-     177.3,
-     218.8,
-     44.8
-    ],
-    [
-     550.0,
-     1025.0,
-     293.0,
-     166.0
-    ]
-   ]
+   "height": 1191.0
   },
   {
    "id": "1",
@@ -47,34 +26,13 @@
    "color": "#8A8F98",
    "background": "maps/1.webp",
    "backgroundHighlight": "maps/1-full.webp",
-   "labels": "maps/1-labels.webp",
+   "labels": "maps/1-labels.svg",
    "dark": {
     "background": "maps/1-dark.webp",
-    "backgroundHighlight": "maps/1-full-dark.webp",
-    "labels": "maps/1-labels-dark.webp"
+    "backgroundHighlight": "maps/1-full-dark.webp"
    },
    "width": 843.0,
-   "height": 1191.0,
-   "chromeBoxes": [
-    [
-     141.6,
-     26.2,
-     563.6,
-     123.2
-    ],
-    [
-     77.5,
-     177.2,
-     171.1,
-     44.8
-    ],
-    [
-     550.0,
-     1025.0,
-     293.0,
-     166.0
-    ]
-   ]
+   "height": 1191.0
   },
   {
    "id": "2",
@@ -84,34 +42,13 @@
    "color": "#2E9E4F",
    "background": "maps/2.webp",
    "backgroundHighlight": "maps/2-full.webp",
-   "labels": "maps/2-labels.webp",
+   "labels": "maps/2-labels.svg",
    "dark": {
     "background": "maps/2-dark.webp",
-    "backgroundHighlight": "maps/2-full-dark.webp",
-    "labels": "maps/2-labels-dark.webp"
+    "backgroundHighlight": "maps/2-full-dark.webp"
    },
    "width": 843.0,
-   "height": 1191.0,
-   "chromeBoxes": [
-    [
-     141.6,
-     26.2,
-     563.6,
-     123.2
-    ],
-    [
-     77.5,
-     177.2,
-     218.8,
-     44.8
-    ],
-    [
-     550.0,
-     1025.0,
-     293.0,
-     166.0
-    ]
-   ]
+   "height": 1191.0
   },
   {
    "id": "3",
@@ -121,34 +58,13 @@
    "color": "#111111",
    "background": "maps/3.webp",
    "backgroundHighlight": "maps/3-full.webp",
-   "labels": "maps/3-labels.webp",
+   "labels": "maps/3-labels.svg",
    "dark": {
     "background": "maps/3-dark.webp",
-    "backgroundHighlight": "maps/3-full-dark.webp",
-    "labels": "maps/3-labels-dark.webp"
+    "backgroundHighlight": "maps/3-full-dark.webp"
    },
    "width": 843.0,
-   "height": 1191.0,
-   "chromeBoxes": [
-    [
-     141.6,
-     26.2,
-     563.6,
-     123.2
-    ],
-    [
-     77.5,
-     177.2,
-     182.1,
-     44.8
-    ],
-    [
-     550.0,
-     1025.0,
-     293.0,
-     166.0
-    ]
-   ]
+   "height": 1191.0
   }
  ],
  "categories": [
@@ -457,157 +373,6 @@
      154.1,
      23.0
     ]
-   ],
-   "labelsWhenSelected": [
-    {
-     "type": "polygon",
-     "points": [
-      [
-       315.7,
-       384.7
-      ],
-      [
-       313.0,
-       385.3
-      ],
-      [
-       310.7,
-       389.0
-      ],
-      [
-       281.3,
-       465.0
-      ],
-      [
-       282.0,
-       467.0
-      ],
-      [
-       278.7,
-       475.3
-      ],
-      [
-       277.0,
-       476.3
-      ],
-      [
-       222.0,
-       618.7
-      ],
-      [
-       222.0,
-       620.0
-      ],
-      [
-       224.7,
-       622.7
-      ],
-      [
-       234.7,
-       626.3
-      ],
-      [
-       236.3,
-       628.3
-      ],
-      [
-       267.7,
-       640.0
-      ],
-      [
-       270.3,
-       639.3
-      ],
-      [
-       272.7,
-       635.7
-      ],
-      [
-       296.7,
-       573.3
-      ],
-      [
-       296.7,
-       569.7
-      ],
-      [
-       318.3,
-       513.3
-      ],
-      [
-       319.3,
-       513.0
-      ],
-      [
-       320.0,
-       509.0
-      ],
-      [
-       321.3,
-       508.0
-      ],
-      [
-       323.3,
-       500.3
-      ],
-      [
-       325.0,
-       499.0
-      ],
-      [
-       325.0,
-       496.0
-      ],
-      [
-       326.7,
-       491.7
-      ],
-      [
-       328.3,
-       491.0
-      ],
-      [
-       328.3,
-       487.3
-      ],
-      [
-       329.7,
-       484.0
-      ],
-      [
-       331.3,
-       483.3
-      ],
-      [
-       332.7,
-       476.0
-      ],
-      [
-       334.7,
-       474.7
-      ],
-      [
-       335.0,
-       471.3
-      ],
-      [
-       336.3,
-       470.3
-      ],
-      [
-       361.0,
-       406.3
-      ],
-      [
-       360.3,
-       402.7
-      ],
-      [
-       357.3,
-       400.7
-      ]
-     ]
-    }
    ]
   },
   {
@@ -656,65 +421,6 @@
      154.1,
      23.0
     ]
-   ],
-   "labelsWhenSelected": [
-    {
-     "type": "polygon",
-     "points": [
-      [
-       386.0,
-       409.7
-      ],
-      [
-       384.3,
-       412.0
-      ],
-      [
-       384.3,
-       487.3
-      ],
-      [
-       387.0,
-       490.3
-      ],
-      [
-       396.7,
-       490.7
-      ],
-      [
-       397.0,
-       491.3
-      ],
-      [
-       433.0,
-       491.7
-      ],
-      [
-       435.3,
-       491.0
-      ],
-      [
-       437.0,
-       488.7
-      ],
-      [
-       437.0,
-       412.0
-      ],
-      [
-       436.3,
-       410.7
-      ],
-      [
-       433.0,
-       409.0
-      ],
-      [
-       388.3,
-       409.0
-      ]
-     ]
-    }
    ]
   },
   {
@@ -763,77 +469,6 @@
      154.1,
      23.0
     ]
-   ],
-   "labelsWhenSelected": [
-    {
-     "type": "polygon",
-     "points": [
-      [
-       318.7,
-       571.0
-      ],
-      [
-       316.7,
-       576.3
-      ],
-      [
-       314.7,
-       577.7
-      ],
-      [
-       300.3,
-       615.3
-      ],
-      [
-       301.0,
-       619.0
-      ],
-      [
-       304.0,
-       621.0
-      ],
-      [
-       364.3,
-       644.0
-      ],
-      [
-       368.7,
-       643.7
-      ],
-      [
-       374.0,
-       632.0
-      ],
-      [
-       373.0,
-       631.0
-      ],
-      [
-       374.3,
-       627.3
-      ],
-      [
-       376.3,
-       626.0
-      ],
-      [
-       386.3,
-       599.7
-      ],
-      [
-       385.7,
-       596.0
-      ],
-      [
-       382.7,
-       594.0
-      ],
-      [
-       322.3,
-       571.0
-      ]
-     ]
-    }
    ]
   },
   {
@@ -1884,9 +1519,9 @@
    ],
    "labelBoxes": [
     [
-     352.9,
+     353.3,
      867.3,
-     143.1,
+     142.7,
      21.9
     ]
    ],
@@ -1929,9 +1564,9 @@
    ],
    "labelBoxes": [
     [
-     343.6,
+     344.1,
      893.6,
-     160.4,
+     160.0,
      21.9
     ]
    ],
@@ -1973,9 +1608,9 @@
    ],
    "labelBoxes": [
     [
-     97.9,
+     97.5,
      983.9,
-     132.6,
+     133.8,
      84.7
     ]
    ],

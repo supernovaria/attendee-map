@@ -29,8 +29,8 @@ Static files only: no server, no database, no login. Brief: [`venue-map-brief.md
 - **Floor tabs**: the current floor has a thin outline in that floor's colour; tapping it again shows the whole floor. Switching floor automatically (from search or a category) shows a short "Switched to …" message.
 - **Tap anything on the map** to see what it is.
 - **Colours** on the plan are muted. While something is selected, everything else turns grey (labels, pins, coloured areas) and only the selection keeps its colour; the plan's walls and outlines stay as they are. A selected room is marked like with a highlighter (pale blue in light mode, blue-grey in dark mode); its walls, doors and text keep full contrast. Add `&outline=1` to the URL to also draw an outline around selected areas (for comparison).
-- **Org fair**: the printed boxes only show while Org fair is selected. Of the three arrows from the *Organisations Fair* title only the middle one is shown (`hiddenArrows` in `scripts/import-config.json`; the import removes the others from the label image).
-- **Labels**: with something selected, only its labels stay crisp and the rest fade. The **Aa** button (top right of the map) shows every label exactly as printed in the PDF; the choice is remembered on that phone.
+- **Org fair**: the printed boxes only show while Org fair is selected. Of the three arrows from the *Organisations Fair* title only the middle one is shown (`hiddenArrows` in `scripts/import-config.json`; the import leaves the others out of the label layer).
+- **Labels**: drawn as vectors, so they stay sharp however far you zoom in. With something selected, only its labels keep their colour and the rest turn grey and fade. The **Aa** button (top right of the map) shows every label exactly as printed in the PDF; the choice is remembered on that phone.
 - **Colours**: the round button under **Aa** switches between *automatic* (half circle: light or dark like the phone), *light* (sun) and *dark* (moon). In dark the map itself is dark too: white paper turns dark grey, black walls and text turn light, the coloured areas keep their colours. Remembered on that phone.
 - **Zoom**: pinch, double-tap, mouse wheel; the corner button resets.
 - **Links for printed QR codes** (open a pre-filtered view):
@@ -103,11 +103,11 @@ Areas painted over by a box in Canva (e.g. a lift hidden with a grey box) are le
 
 Files it writes:
 
-- `maps/<floor>.webp`: the plan picture with colours muted (walls untouched). Loaded first. (The grey copies used while something is selected are made by the browser from this file and the labels file; nothing extra to download.)
-- `maps/<floor>-labels.webp`: everything you drew in Canva (text, pins, arrows, boxes), on a transparent background, separated from the plan picture. Loaded first.
+- `maps/<floor>.webp`: the plan picture with colours muted (walls untouched). Loaded first. (The grey copy used while something is selected is made by the browser from this file; nothing extra to download.)
+- `maps/<floor>-labels.svg`: everything you drew in Canva (text, pins, arrows, boxes) as vectors, taken straight from the PDF in Canva's drawing order, without the plan picture. Text is kept as letter shapes (exactly Canva's look, no fonts needed). Each part is tagged with the item(s) it belongs to, so the page can grey out or hide parts. One file for light and dark: dark mode recolours it. Loaded first.
 - `maps/<floor>-full.webp`: the plan picture in full colour; only fetched when something on that floor is highlighted, and only shown inside the highlighted shapes.
-- `maps/<floor>-dark.webp`, `maps/<floor>-full-dark.webp`, `maps/<floor>-labels-dark.webp`: the same three for dark mode (only downloaded by phones in dark mode). How dark: `"dark"` in `scripts/import-config.json` (`floor` should match `--map-bg` in `style.css`). In the dark labels picture the printed meeting-point pins get a thin white outline (`pinOutline`, `pinOutlinePx`), so their pale needle shows on the dark floor.
-- Solid grey/white boxes drawn in Canva over the plan (e.g. hiding closed areas) are painted into the plan layers, so they are muted and dimmed with the plan and fading labels never reveals what they cover. Boxes that don't actually show in the PDF are ignored.
+- `maps/<floor>-dark.webp`, `maps/<floor>-full-dark.webp`: the same two plan pictures for dark mode (only downloaded by phones in dark mode). How dark: `"dark"` in `scripts/import-config.json` (`floor` should match `--map-bg` in `style.css`); the label layer's dark colours are worked out the same way. In dark mode the printed meeting-point pins get a thin white outline (`pinOutline`, `pinOutlinePt`), so their pale needle shows on the dark floor.
+- Solid grey/white boxes drawn in Canva over the plan (e.g. hiding closed areas) are painted into the plan layers (only the part that actually shows on the page), so they are muted and dimmed with the plan and fading labels never reveals what they cover. Boxes that don't actually show in the PDF are ignored.
 - `source/raster/<floor>.png` + `source/raster/rasters.json`: high-res copies with pixel sizes, kept for the layout planner (not loaded by the page).
 - `import/overlay.generated.json`: raw import result.
 - `data/overlay.json`: generated + overrides. **This is what the page reads.**
@@ -127,13 +127,14 @@ For any other tool that wants to produce this map (the layout planner, a future 
 8. Optional extras the viewer understands: `floor.shortName` (tab label), `floor.color` (bar in the room list), `item.shapes` (several areas for one item, e.g. four nap rooms), `floor.view` (`[x, y, w, h]` start view), `category.chip: false` (searchable, no chip), `category.marker: false` (no extra marker on a selected item, because the plan prints its own pin; meeting points), `item.description`, `category.aliases` (extra search words for every item of the category, e.g. `WC`), `item.links` (`[{"label": "Directions", "url": "https://…"}]`: buttons on the item's card; https only), `item.connects` (stairs/lifts: ids of the other floors they go to; used by *How to get here*).
    Layers (all optional; without them the page dims the whole background instead):
    - `floor.backgroundHighlight`: full-colour image, shown only inside highlighted shapes (so `background` can be muted);
-   - `floor.labels`: transparent image of printed labels drawn on top;
-   - `item.labelBoxes`: `[x, y, w, h]` boxes where an item's printed label/pin sits in that image (kept crisp when the item is highlighted, faded otherwise);
-   - `floor.chromeBoxes`: title/legend areas, faded unless *All labels* is on;
-   - `item.labelsWhenSelected`: shapes in the label image shown only while that item (or its category) is selected (e.g. the Org fair boxes);
-   - `floor.hiddenLabels`: shapes in the label image never shown, except with *All labels* (fallback for unwanted arrows the import couldn't remove from the PDF drawing; normally absent);
-   - `floor.fixedBoxes`: areas of the label image that are always fully shown;
-   - `floor.dark`: `{background, backgroundHighlight, labels}` dark-mode versions of those pictures (same size); each missing one falls back to the light picture.
+   - `floor.labels`: the printed labels drawn on top. Best as an **SVG** (what the import writes), drawn into the map itself: inside its top-level `<g>`, each group is one of
+     - `<g data-i="id1 id2">`: the printed label/pin/arrow of those items (full colour while one of them is selected, grey and faded while something else is),
+     - `<g data-sel="id">`: printed only while that item (or its category) is selected, e.g. the Org fair boxes,
+     - `<g class="chrome">`: title and legend, always faint unless *All labels* is on,
+     - `<g>`: anything else (grey and faded while something is selected).
+     Colours are classes, and the file's own `<style>` says what they become in grey (`.off …`) and in dark mode (`.dark …`); ids in the file must be unique across floors (the import prefixes them with the floor id). A picture (png/webp) also works: it then fades as a whole while something is selected;
+   - `item.labelBoxes`: `[x, y, w, h]` boxes where an item's printed label/pin sits (tapping there selects the item; the import uses them to tag the SVG);
+   - `floor.dark`: `{background, backgroundHighlight, labels}` dark-mode versions of those pictures (same size); each missing one falls back to the light picture. (`labels` only for a picture: an SVG recolours itself.)
 9. **Any tool may regenerate `data/overlay.json` and `maps/` as long as `python3 scripts/validate.py` passes.**
 
 Icon names available: `toilet food pin stairs bolt booth flask door lift stage info coat firstaid quiet registration` (anything else shows a dot).
