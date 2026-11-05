@@ -212,8 +212,9 @@ svg { display: block; }
   .dot-btn.hint .cat-dot { animation: none; }
 }
 .toast {
-  position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); z-index: 3; max-width: calc(100% - 48px);
-  background: var(--chip-on); color: var(--chip-on-fg); padding: 10px 16px; border-radius: 12px; font-weight: 650;
+  /* top edge, clear of the top-right buttons (12px + 44px + gap on each side) so it hides as little map as possible */
+  position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 3; max-width: calc(100% - 136px);
+  background: var(--chip-on); color: var(--chip-on-fg); padding: 8px 14px; border-radius: 12px; font-weight: 650;
   box-shadow: var(--shadow); pointer-events: none; text-align: center; transition: opacity .3s; overflow-wrap: anywhere;
 }
 .toast[hidden] { display: none; }
