@@ -431,23 +431,39 @@ def find_arrow(page, tip, covers, reach=8):
     return found
 
 
-def find_outlined_areas(page, covers, legend):
-    """Unfilled boxes with a coloured outline (e.g. the Org fair areas)."""
+def find_area_boxes(page, covers, legend):
+    """Boxes Canva draws round an area (Org fair, catering, museum ...), recognised by
+    colour (areaBoxes in the config): an unfilled coloured outline, or a see-through
+    coloured fill (Canva writes a box with a thick border as a see-through fill plus
+    the border ring as a second, opaque path; the fill is the box)."""
+    keys = CFG.get("areaBoxes", [])
+
+    def key_of(c):
+        if c is None:
+            return None
+        rgb = [v * 255 for v in c]
+        k = min(keys, key=lambda k: math.dist(rgb, k["rgb"]), default=None)
+        return k if k and math.dist(rgb, k["rgb"]) <= k.get("tolerance", 30) else None
+
     out = []
     for d in page.get_drawings():
-        c = d.get("color")
-        if d.get("fill") is not None or c is None:
-            continue
-        if max(c) - min(c) < 0.4:  # grey/black lines = arrows etc.
-            continue
         r = d["rect"]
-        if r.width * r.height < 600 or in_box(r.x0, r.y0, legend):
+        if in_box(r.x0, r.y0, legend) or is_hidden(d.get("seqno", 10**9), r, covers):
             continue
-        if is_hidden(d.get("seqno", 10**9), r, covers):
+        c, f = d.get("color"), d.get("fill")
+        if c is not None and d["type"] in ("s", "fs") and max(c) - min(c) >= 0.4:
+            col = c
+        elif f is not None and c is None and (d.get("fill_opacity") or 1) < 0.95 and max(f) - min(f) >= 0.4:
+            col = f
+        else:
+            continue
+        k = key_of(col)
+        if r.width * r.height < (150 if k else 600):
             continue
         pts = path_points(d)
         if len(pts) >= 3:
-            out.append({"points": [list(p) for p in pts], "rect": tuple(r), "color": c, "drawing": d})
+            out.append({"points": [list(p) for p in pts], "rect": tuple(r), "color": col,
+                        "category": k["category"] if k else None, "drawing": d})
     return out
 
 
@@ -514,13 +530,35 @@ def svg_ops(page):
     walk(root, [])
     log = page.get_bboxlog()
     kinds = {"use": "fill-text", "image": "fill-image"}
-    if len(log) != len(ops) or any(
-            kinds.get(o["tag"], "stroke-path" if o["el"].get("fill") == "none" else "fill-path") != k
-            for o, (k, _) in zip(ops, log)):
+    # A text operation is one entry in the log but one <use> per letter in the SVG.
+    # Older Canva exports wrote one letter per operation; newer ones a whole line,
+    # where some letters (often spaces) have no <use>. Match the letters of each
+    # operation (text trace) to the <use>s by their data-text.
+    letters = {s["seqno"]: [chr(c[0]) for c in s["chars"]] for s in page.get_texttrace()}
+
+    def kind_of(o):
+        return kinds.get(o["tag"], "stroke-path" if o["el"].get("fill") == "none" else "fill-path")
+
+    out, j = [], 0
+    for i, (k, r) in enumerate(log):
+        take = []
+        if k == "fill-text" and i in letters:
+            for ch in letters[i]:
+                if j + len(take) < len(ops) and ops[j + len(take)]["tag"] == "use"                         and ops[j + len(take)]["el"].get("data-text") == ch:
+                    take.append(ops[j + len(take)])
+        elif j < len(ops) and kind_of(ops[j]) == k:
+            take = [ops[j]]
+        if not take and k != "fill-text":
+            raise RuntimeError("PyMuPDF's SVG doesn't line up with the page's drawing log any more "
+                               f"(new PyMuPDF version?) - the label layer can't be made (page {page.number + 1}, operation {i}).")
+        for o in take:
+            o.update(seq=i, kind=k, bbox=pymupdf.Rect(r))
+        out += take
+        j += len(take)
+    if j != len(ops):
         raise RuntimeError("PyMuPDF's SVG doesn't line up with the page's drawing log any more "
                            "(new PyMuPDF version?) - the label layer can't be made.")
-    for i, (o, (k, r)) in enumerate(zip(ops, log)):
-        o.update(seq=i, kind=k, bbox=pymupdf.Rect(r))
+    ops = out
     return ops, by_id
 
 
@@ -542,7 +580,7 @@ def clip_of(page, seq):
     """The rectangle that drawing operation `seq` is clipped to (rectangular clips only)."""
     ops, by_id = svg_ops(page)
     out = pymupdf.Rect(page.rect)
-    for g in ops[seq]["chain"]:
+    for g in next(o for o in ops if o["seq"] == seq)["chain"]:
         m = re.fullmatch(r"url\(#([^)]+)\)", g.get("clip-path", ""))
         r = rect_box(by_id[m.group(1)]) if m and m.group(1) in by_id else None
         if r:
@@ -1082,7 +1120,7 @@ def main():
     doc = pymupdf.open(ROOT / CFG["pdf"])
     cats = {c["id"]: c for c in CFG["categories"]}
     legend = CFG["legendBox"]
-    label_rules = [(re.compile(r["match"], re.I), r["category"]) for r in CFG["labelCategories"]]
+    label_rules = [(re.compile(r["match"], re.I), r) for r in CFG["labelCategories"]]
     ignore_rules = [re.compile(p, re.I) for p in CFG["ignoreLabels"]]
     scale = CFG["rasterScale"]
 
@@ -1163,16 +1201,41 @@ def main():
         for b in blocks:
             if b in point_blocks:
                 continue
-            cat = next((c for p, c in label_rules if p.search(b["text"])), None)
-            if cat:
-                b["category"] = cat
+            rule = next((r for p, r in label_rules if p.search(b["text"])), None)
+            if rule:
+                b["category"], b["rule"] = rule["category"], {"id": rule["category"], **rule}
                 cat_blocks.append(b)
             else:
                 room_blocks.append(b)
+        # lines of one label that came apart (the museum's "AI Safety & Society" /
+        # "Museum" have different fonts): blocks of the same rule right above each other
+        merged = True
+        while merged:
+            merged = False
+            for a in cat_blocks:
+                for b in cat_blocks:
+                    if a is b or a["rule"].get("match") != b["rule"].get("match"):
+                        continue
+                    ra, rb = pymupdf.Rect(a["bbox"]), pymupdf.Rect(b["bbox"])
+                    if 0 <= rb.y0 - ra.y1 < 10 and min(ra.x1, rb.x1) > max(ra.x0, rb.x0):
+                        u = ra | rb
+                        a.update(bbox=tuple(u), text=a["text"] + " " + b["text"],
+                                 cx=(u.x0 + u.x1) / 2, cy=(u.y0 + u.y1) / 2)
+                        cat_blocks.remove(b)
+                        merged = True
+                        break
+                if merged:
+                    break
 
         # 2a. meeting points
         mpins = find_pins(page, covers, CFG["markers"]["meetingPin"]["fill"], legend)
-        pairs, up, ub, amb = greedy_match([p["tip"] for p in mpins], point_blocks, 220)
+        # a label with an arrow is matched from the arrow's tip (C6 points at a pin
+        # that is nearer to the C4 label)
+        anchors = []
+        for b in point_blocks:
+            tip = label_arrow(page, b)
+            anchors.append({**b, "bbox": (tip[0] - 1, tip[1] - 1, tip[0] + 1, tip[1] + 1)} if tip else b)
+        pairs, up, ub, amb = greedy_match([p["tip"] for p in mpins], anchors, 220)
         for pi, bi, d in pairs:
             b = point_blocks[bi]
             m = re.match(r"^point\s+([A-Z]?\d+)\s*[-–]?\s*(.*)$", b["text"], re.I)
@@ -1197,79 +1260,111 @@ def main():
             issue(fname, f'Label "{point_blocks[bi]["text"]}" has no pin nearby - skipped.')
         st["meeting points"] = len(pairs)
 
-        # 2b. navy pins -> category from nearest label (Catering, Project fair)
+        # Labels that name a category (labelCategories in the config). Each rule may give
+        # the item's id base (kept stable: ids end up in printed QR codes), name and aliases.
+        def rule_of(b):
+            return b["rule"]
+
+        def item_name(b):
+            r = rule_of(b)
+            if r.get("nameNearestRoom"):
+                near = nearest_room(b, room_blocks)
+                return r["name"] + (f" · {near}" if near else "")
+            return r.get("name") or b["text"]
+
+        def item_aliases(b):
+            r = rule_of(b)
+            return list(dict.fromkeys(r.get("aliases", []) + [b["text"]]))
+
+        # 2b. boxes drawn round an area (by colour, areaBoxes) -> the nearest label of
+        # the same category. All boxes of one label make one item (several shapes).
+        boxes = find_area_boxes(page, covers, legend)
+        by_label = {}
+        for area in boxes:
+            c = area["category"]
+            ax, ay = (area["rect"][0] + area["rect"][2]) / 2, (area["rect"][1] + area["rect"][3]) / 2
+            if c is None:
+                issue(fname, f"Box at {[round(v) for v in area['rect']]} in a colour not listed in areaBoxes "
+                      f"(#{''.join(f'{round(v * 255):02X}' for v in area['color'])}) - skipped.")
+                continue
+            cands = [b for b in cat_blocks if b["category"] == c and rule_of(b).get("boxes", True)]
+            if not cands:
+                issue(fname, f"{cats[c]['label']} box at {[round(v) for v in area['rect']]} has no matching label on this floor - skipped.")
+                continue
+            b = min(cands, key=lambda b: rect_dist(ax, ay, b["bbox"]))
+            by_label.setdefault(id(b), (b, []))[1].append(area)
+        for b, areas in by_label.values():
+            b["used"] = True
+            c = b["category"]
+            areas.sort(key=lambda a: -(a["rect"][2] - a["rect"][0]) * (a["rect"][3] - a["rect"][1]))
+            big = areas[0]["rect"]
+            shapes = [{"type": "polygon", "points": a["points"]} for a in areas]
+            it = {
+                "id": new_id(f"{rule_of(b)['id']}-{fid}"), "floor": fid, "category": c,
+                "name": item_name(b),
+                "aliases": item_aliases(b),
+                "shape": shapes[0],
+                **({"shapes": shapes[1:]} if len(shapes) > 1 else {}),
+                "pin": [r1((big[0] + big[2]) / 2), r1((big[1] + big[3]) / 2)],
+                "labelBoxes": [xywh(a["rect"], 4) for a in areas] + [xywh(b["bbox"])],
+            }
+            items.append(it)
+            if c in CFG.get("boxesOnlyWhenSelected", []):
+                # the printed box (its outline and its see-through fill, which Canva
+                # writes as a picture of the same size) is only shown while selected.
+                # A box with a thick border is a see-through fill plus a separate
+                # outline path around it, a bit bigger (half the line width; for a
+                # tilted box PyMuPDF's box of the outline is ~18 pt bigger): it counts too.
+                for area in areas:
+                    ar = pymupdf.Rect(area["rect"])
+                    for k, r in enumerate(page.get_bboxlog()):
+                        rr = pymupdf.Rect(r[1])
+                        d = max(abs(x - y) for x, y in zip(rr, ar))
+                        if k == area["drawing"]["seqno"] or r[0] in ("fill-image", "fill-path") and d < 3 \
+                                or r[0] == "stroke-path" and d < 25 and rr.contains(ar):
+                            sel[k] = it["id"]
+            st[cats[c]["label"] + " boxes"] = st.get(cats[c]["label"] + " boxes", 0) + len(areas)
+
+        # 2c. navy pins -> the nearest label that has no box (Project fair; Catering before 8 Nov)
         npins = find_pins(page, covers, CFG["markers"]["navyPin"]["fill"], legend)
-        pin_label_blocks = [b for b in cat_blocks if b["category"] in ("food", "project-fair")]
+        pin_label_blocks = [b for b in cat_blocks if not b.get("used") and rule_of(b).get("pins", True)
+                            and rule_of(b)["id"] != "charging"]
         pairs, up, ub, amb = greedy_match([p["tip"] for p in npins], pin_label_blocks, 60)
         for pi, bi, d in pairs:
             b = pin_label_blocks[bi]
             b["used"] = True
             c = b["category"]
-            iid = new_id(f"{c}-{fid}")
-            near = nearest_room(b, room_blocks)
             items.append({
-                "id": iid, "floor": fid, "category": c,
-                "name": cats[c]["label"] if c != "food" else ("Catering" + (f" · {near}" if near else "")),
-                "aliases": ["Catering", "Food", "Snacks", "Coffee"] if c == "food" else [b["text"]],
+                "id": new_id(f"{rule_of(b)['id']}-{fid}"), "floor": fid, "category": c,
+                "name": item_name(b),
+                "aliases": item_aliases(b),
                 "pin": [r1(npins[pi]["tip"][0]), r1(npins[pi]["tip"][1])],
                 "labelBoxes": [xywh(b["bbox"]), xywh(npins[pi]["rect"])],
             })
-            st[cats[c]["label"]] = st.get(cats[c]["label"], 0) + 1
+            st[cats[c]["label"] + " pins"] = st.get(cats[c]["label"] + " pins", 0) + 1
         for pi in up:
             t = npins[pi]["tip"]
-            issue(fname, f"Dark-blue pin at ({t[0]:.0f}, {t[1]:.0f}) has no Catering/Project fair label - skipped.")
+            issue(fname, f"Dark-blue pin at ({t[0]:.0f}, {t[1]:.0f}) has no category label nearby - skipped.")
 
-        # 2c. outlined areas -> nearest org/project fair label on the page
-        fair_blocks = [b for b in cat_blocks if b["category"] in ("org-fair", "project-fair")]
-        outlined = find_outlined_areas(page, covers, legend)
-        for n, area in enumerate(outlined, 1):
-            if not fair_blocks:
-                issue(fname, f"Outlined box at {[round(v) for v in area['rect']]} has no fair label on this floor - skipped.")
-                continue
-            ax, ay = (area["rect"][0] + area["rect"][2]) / 2, (area["rect"][1] + area["rect"][3]) / 2
-            b = min(fair_blocks, key=lambda b: rect_dist(ax, ay, b["bbox"]))
-            b["used"] = True
-            c = b["category"]
-            pts = area["points"]
-            items.append({
-                "id": new_id(f"{c}-area-{fid}"), "floor": fid, "category": c,
-                "name": cats[c]["label"] + " area",
-                "aliases": [b["text"]],
-                "shape": {"type": "polygon", "points": pts},
-                "pin": [r1(ax), r1(ay)],
-                "labelBoxes": [xywh(area["rect"], 4), xywh(b["bbox"])],
-            })
-            if c in CFG.get("boxesOnlyWhenSelected", []):
-                # the printed box (its outline and its see-through fill, which Canva
-                # writes as a picture of the same size) is only shown while selected
-                ar = pymupdf.Rect(area["rect"])
-                for k, r in enumerate(page.get_bboxlog()):
-                    rr = pymupdf.Rect(r[1])
-                    if k == area["drawing"]["seqno"] or r[0] in ("fill-image", "fill-path") and                             max(abs(a - b) for a, b in zip(rr, ar)) < 3:
-                        sel[k] = items[-1]["id"]
-            if len(fair_blocks) > 1:
-                issue(fname, f"Outlined box at {[round(v) for v in area['rect']]} assigned to \"{b['text']}\" (nearest of several fair labels).")
-            st[cats[c]["label"] + " areas"] = st.get(cats[c]["label"] + " areas", 0) + 1
-
-        # 2d. charging + any unused category labels -> pin at label
+        # 2d. charging + any unused category labels -> pin at the label (or its arrow's tip)
         for b in cat_blocks:
             if b.get("used"):
                 continue
             c = b["category"]
-            if c in ("org-fair",):
-                issue(fname, f'Label "{b["text"]}" has no outlined area - skipped.')
+            if rule_of(b).get("needsBox"):
+                issue(fname, f'Label "{b["text"]}" has no box round its area - skipped.')
                 continue
             pin = arrow_target(page, b) or [r1(b["cx"]), r1(b["cy"])]
             items.append({
-                "id": new_id(f"{c}-{fid}"), "floor": fid, "category": c,
-                "name": "Charging station" if c == "charging" else b["text"],
-                "aliases": [b["text"]],
+                "id": new_id(f"{rule_of(b)['id']}-{fid}"), "floor": fid, "category": c,
+                "name": item_name(b),
+                "aliases": item_aliases(b),
                 "pin": pin,
                 "labelBoxes": [xywh((min(b["bbox"][0], pin[0]), min(b["bbox"][1], pin[1]),
                                      max(b["bbox"][2], pin[0]), max(b["bbox"][3], pin[1])), 12)],
             })
-            how = "arrow tip" if pin != [r1(b["cx"]), r1(b["cy"])] else "the label (no pin found)"
-            issue(fname, f'"{b["text"]}": placed at {how}. Check the position on site.')
+            if pin == [r1(b["cx"]), r1(b["cy"])]:
+                issue(fname, f'"{b["text"]}": placed at the label (no pin, box or arrow found). Check the position on site.')
 
         # 3. raster colour areas
         cover_boxes = canva_covers(page, covers)
@@ -1477,6 +1572,24 @@ def lift_label(page, reg, lines):
     return None
 
 
+def label_arrow(page, b):
+    """Far end of a dark arrow (a stroked line, maybe with its head) that starts at
+    label b, e.g. "Point D3" pointing at its pin across the foyer; else None."""
+    best = None
+    for d in page.get_drawings():
+        c = d.get("color")
+        if d["type"] != "s" or c is None or max(c) > 0.3 or len(d["items"]) > 3:
+            continue
+        for it in d["items"]:
+            if it[0] != "l":
+                continue
+            for a, z in ((it[1], it[2]), (it[2], it[1])):
+                far = rect_dist(z.x, z.y, b["bbox"])
+                if rect_dist(a.x, a.y, b["bbox"]) < 12 and far > 25 and (not best or far > best[0]):
+                    best = (far, (z.x, z.y))
+    return best[1] if best else None
+
+
 def arrow_target(page, b):
     """If a coloured arrow starts at this label, return the end far from it."""
     best = None
@@ -1490,7 +1603,7 @@ def arrow_target(page, b):
             if it[0] != "l":
                 continue
             for a, z in ((it[1], it[2]), (it[2], it[1])):
-                if rect_dist(a.x, a.y, b["bbox"]) < 12 and rect_dist(z.x, z.y, b["bbox"]) > 25:
+                if rect_dist(a.x, a.y, b["bbox"]) < 12 and rect_dist(z.x, z.y, b["bbox"]) > 15:
                     if not best or rect_dist(z.x, z.y, b["bbox"]) > best[0]:
                         best = (rect_dist(z.x, z.y, b["bbox"]), [r1(z.x), r1(z.y)])
     return best[1] if best else None
@@ -1503,7 +1616,10 @@ def shade_check(doc, cfg):
             f = d.get("fill")
             if f and max(f) - min(f) > 0.25:
                 fills.add(tuple(round(v * 255) for v in f))
+    boxes = [k["rgb"] for k in cfg.get("areaBoxes", [])]
     for f in sorted(fills):
+        if any(math.dist(f, b) <= 30 for b in boxes):
+            continue  # an area box's own colour (catering red, ...): meant to differ
         for k in cfg["rasterKey"]:
             dist = math.dist(f, k["rgb"])
             if k["tolerance"] < dist < 90:
@@ -1629,10 +1745,18 @@ def write_report(stats, gen, final):
         L.append(f"| {f} | " + " | ".join(str(s.get(k, 0)) for k in keys) + " |")
     L += ["", f"Generated items: {len(gen['items'])}. Published in `data/overlay.json`: {len(final['items'])}.", "",
           "## Things to check (numbered so you can answer by number)", ""]
-    for n, (f, t) in enumerate(issues, 1):
+    acks = [(re.compile(a["match"]), a.get("why", "")) for a in CFG.get("acknowledged", [])]
+    open_, decided = [], []
+    for f, t in issues:
+        why = next((w for p, w in acks if p.search(t)), None)
+        (open_ if why is None else decided).append((f, t, why))
+    for n, (f, t, _) in enumerate(open_, 1):
         L.append(f"{n}. **{f}**: {t}")
-    if not issues:
+    if not open_:
         L.append("Nothing flagged.")
+    if decided:
+        L += ["", "## Already decided (acknowledged in `scripts/import-config.json`)", ""]
+        L += [f"- **{f}**: {t} *({why})*" for f, t, why in decided]
     L += ["", "## How to fix things", "",
           "Edit `import/overlay.overrides.json` (never `data/overlay.json` directly), then re-run `python3 scripts/import.py`. "
           "See the README section *Correcting the map*.", ""]

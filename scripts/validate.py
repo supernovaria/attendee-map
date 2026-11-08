@@ -59,11 +59,18 @@ def main() -> int:
             dk = f.get("dark", {})
             if key in dk and not (site_root / dk[key]).exists():
                 errors.append(f"floor '{f['id']}': dark.{key} file '{dk[key]}' not found")
-    for d in dupes(c["link"] for c in data["categories"] if "link" in c):
+    words = [w for c in data["categories"] for w in ([c["link"]] if "link" in c else []) + c.get("oldLinks", [])]
+    for d in dupes(words):
         errors.append(f"category link word '{d}' is used twice")
     for c in data["categories"]:
         if c.get("link") in cats and c["link"] != c["id"]:
             errors.append(f"category '{c['id']}': link word '{c['link']}' is another category's id")
+        for w in c.get("oldLinks", []):
+            if w in cats:
+                errors.append(f"category '{c['id']}': old link '{w}' is a category's id")
+        if "chipWith" in c and (c["chipWith"] not in cats or c["chipWith"] == c["id"]
+                                or any("chipWith" in x for x in data["categories"] if x["id"] == c["chipWith"])):
+            errors.append(f"category '{c['id']}': chipWith '{c['chipWith']}' must be another category without chipWith")
         if "floor" in c and c["floor"] not in floors:
             errors.append(f"category '{c['id']}': floor '{c['floor']}' does not exist")
 

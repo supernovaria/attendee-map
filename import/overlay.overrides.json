@@ -4,13 +4,14 @@
   "categories": {
     "lifts": {
       "enabled": true,
-      "_why": "Confirmed by Emily 2 Nov 2026",
+      "_why": "Confirmed by Emily 2 Nov 2026 · 8 Nov 2026: shown on the stairs chip (owner: try merging stairs and lifts).",
       "aliases": [
         "elevator",
         "step-free",
         "wheelchair",
         "accessible"
-      ]
+      ],
+      "chipWith": "stairs"
     },
     "toilets": {
       "aliases": [
@@ -42,30 +43,39 @@
       "aliases": [
         "staircase",
         "steps"
-      ]
+      ],
+      "chipLabel": "Stairs & lifts"
     },
-    "charging": {
+    "fairs": {
+      "aliases": [
+        "booth",
+        "booths",
+        "career fair",
+        "expo",
+        "fair",
+        "organisations",
+        "organizations",
+        "posters",
+        "projects",
+        "stand"
+      ],
+      "cardList": true
+    },
+    "extra": {
       "aliases": [
         "power",
         "plug",
         "socket",
-        "charger"
-      ]
-    },
-    "org-fair": {
-      "aliases": [
-        "organisations",
-        "organizations",
-        "booths",
-        "expo",
-        "career fair"
-      ]
-    },
-    "project-fair": {
-      "aliases": [
-        "projects",
-        "posters"
-      ]
+        "charger",
+        "exhibition",
+        "exhibit",
+        "AI safety",
+        "society",
+        "conversations",
+        "networking",
+        "chat"
+      ],
+      "cardList": true
     }
   },
   "items": {
@@ -78,14 +88,24 @@
       ]
     },
     "room-spontaneous-conversation-area": {
-      "_why": "Green box drawn in Canva; flood-fill cannot see it. Rect copied from the PDF.",
+      "_why": "Green box drawn in Canva; flood-fill cannot see it. Rect copied from the PDF. In the Extra category since 8 Nov 2026 (owner); green = its printed box.",
       "shape": {
         "type": "rect",
         "x": 367.6,
         "y": 318.6,
         "width": 74.1,
         "height": 70.4
-      }
+      },
+      "category": "extra",
+      "icon": "chat",
+      "color": "#84CC3D",
+      "order": 3,
+      "aliases": [
+        "Spontaneous Conversations",
+        "conversations",
+        "networking",
+        "chat"
+      ]
     },
     "lifts-2": {
       "description": "Goes to floors 0, 1, 3",
@@ -101,7 +121,9 @@
       "_why": "Meal times from Emily, 3 Nov 2026: Fri dinner only Cafeteria + 3rd floor"
     },
     "food-1": {
-      "description": "Dinner Fri 18:00–19:00 · Lunch Sat & Sun 12:30–14:30"
+      "description": "Dinner Fri 18:00–19:00 · Lunch Sat & Sun 12:30–14:30",
+      "name": "Catering · Cafeteria",
+      "_why": "The nearest printed room name is Einstein's, but the catering box is in the cafeteria (8 Nov 2026)."
     },
     "food-3": {
       "description": "Dinner Fri 18:00–19:00 · Lunch Sat & Sun 12:30–14:30"
@@ -120,32 +142,32 @@
         "type": "polygon",
         "points": [
           [
-            334.0,
-            672.5
+            385.6,
+            674.1
           ],
           [
-            362.5,
-            676.5
+            414.1,
+            678.1
           ],
           [
-            370.0,
-            690.0
+            421.6,
+            691.6
           ],
           [
-            368.0,
-            698.0
+            419.6,
+            699.6
           ],
           [
-            272.0,
-            948.0
+            323.6,
+            949.6
           ],
           [
-            230.0,
-            934.0
+            281.6,
+            935.6
           ]
         ]
       },
-      "_why": "Label sits on the long narrow room (tan counter strip + grey room) along the hall; traced from the plan."
+      "_why": "Label sits on the long narrow room (tan counter strip + grey room) along the hall; traced from the plan. Moved +51.6/+1.6 pt with the 8 Nov PDF (ground-floor plan picture re-cropped)."
     },
     "room-main-entrance": {
       "aliases": [
@@ -163,24 +185,24 @@
         "type": "polygon",
         "points": [
           [
-            150.0,
-            772.5
+            201.6,
+            774.1
           ],
           [
-            175.5,
-            782.5
+            227.1,
+            784.1
           ],
           [
-            152.0,
-            844.5
+            203.6,
+            846.1
           ],
           [
-            126.5,
-            834.5
+            178.1,
+            836.1
           ]
         ]
       },
-      "_why": "The entrance vestibule (double doors in the outer wall) right next to the label; traced from the plan."
+      "_why": "The entrance vestibule (double doors in the outer wall) right next to the label; traced from the plan. Moved +51.6/+1.6 pt with the 8 Nov PDF (ground-floor plan picture re-cropped)."
     },
     "room-austen": {
       "aliases": [
@@ -275,24 +297,54 @@
         "3"
       ],
       "_why": "Spiral stairs; partner of stairs-3-3 (to 2)."
+    },
+    "gwwc-booth-1": {
+      "name": "Effektiv Spenden & GWWC Booths",
+      "icon": "diamond",
+      "color": "#F04D23",
+      "order": 3,
+      "_why": "Orange printed box; donation diamond (owner, 8 Nov 2026)."
+    },
+    "project-fair-1": {
+      "name": "Project Fair",
+      "icon": "flask",
+      "color": "#0D3858",
+      "order": 2,
+      "_why": "Dark-blue printed pin; Project fair's old icon (8 Nov 2026)."
+    },
+    "org-fair-area-0": {
+      "icon": "booth",
+      "color": "#F9317C",
+      "order": 1
+    },
+    "charging-0": {
+      "icon": "bolt",
+      "color": "#FF812D",
+      "order": 1
+    },
+    "museum-0": {
+      "icon": "museum",
+      "color": "#2076EC",
+      "order": 2
     }
   },
   "add": [],
   "categoryOrder": [
+    "meeting-points",
     "toilets",
     "food",
-    "meeting-points",
     "stairs",
     "lifts",
-    "charging",
-    "org-fair",
-    "project-fair",
+    "fairs",
+    "extra",
     "rooms"
   ],
   "_decisions": [
     "2 Nov 2026: areas painted over with grey boxes in Canva are closed off - correctly left out.",
     "2 Nov 2026: hidden old text on the 2nd floor (incl. 'Point 3 - Conversation Area') is stale - correctly ignored.",
     "2 Nov 2026: English UI only. Coat check / registration / first aid / quiet rooms: searchable as rooms is enough, no extra categories.",
-    "3 Nov 2026: Share button works on Emily's phone. Meal times added to catering (Fri dinner 18:00-19:00 Cafeteria + 3rd floor only; Sat/Sun lunch 12:30-14:30 all three). Museum exhibition gets its own category chip (waiting for the Canva PDF)."
+    "3 Nov 2026: Share button works on Emily's phone. Meal times added to catering (Fri dinner 18:00-19:00 Cafeteria + 3rd floor only; Sat/Sun lunch 12:30-14:30 all three). Museum exhibition gets its own category chip (waiting for the Canva PDF).",
+    "8 Nov 2026: new Canva PDF (museum, catering boxes). Chip order: meeting points, toilets, food, stairs & lifts (one chip), fairs & booths (Org fair + Project fair + Effektiv Spenden/GWWC in one category), charging, AIS Museum. Category colours match the printed boxes (catering red, fairs pink, museum blue, charging orange).",
+    "8 Nov 2026 (later): Charging, AIS Museum and the Spontaneous Conversation Area (2nd floor, was only a room) merged into one 'Extra' chip, listed like Fairs & booths. Item ids unchanged; old ?cat=charging / museum / inspecting links open Extra."
   ]
 }

@@ -124,9 +124,28 @@
             "$ref": "#/$defs/id",
             "description": "Optional. Word used after ?cat= in shareable links (e.g. 'hungry' for food). Links with the category id keep working. Never reuse a word for something else once links are out."
           },
+          "oldLinks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/id"
+            },
+            "description": "Optional. Ids and link words of categories merged into this one, so ?cat= links already shared keep working (e.g. 'org-fair', 'curious' on fairs)."
+          },
           "chip": {
             "type": "boolean",
             "description": "false = no chip in the category bar (still searchable)."
+          },
+          "chipWith": {
+            "$ref": "#/$defs/id",
+            "description": "Optional. Id of another category whose chip also shows this one (lifts on the stairs chip). This category gets no chip of its own; both are highlighted in their own colours and the card has a line for each."
+          },
+          "cardList": {
+            "type": "boolean",
+            "description": "Optional. true = the category's card lists every item by name with its floor (Fairs & booths), instead of a count."
+          },
+          "chipLabel": {
+            "type": "string",
+            "description": "Optional. Chip text when other categories join this chip (e.g. 'Stairs & lifts'); default: label."
           },
           "marker": {
             "type": "boolean",
@@ -154,6 +173,19 @@
           "pin"
         ],
         "properties": {
+          "icon": {
+            "type": "string",
+            "description": "Optional. This item's own icon instead of its category's (the fairs: booth, flask, diamond)."
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$",
+            "description": "Optional. This item's own colour (marker, highlight, icon) instead of its category's."
+          },
+          "order": {
+            "type": "number",
+            "description": "Optional. Position in a cardList category's card (smaller first); default after the numbered ones, by floor."
+          },
           "id": {
             "$ref": "#/$defs/id"
           },

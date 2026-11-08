@@ -33,18 +33,67 @@
     "smallDoorPt": 5,
     "smallOpeningPt": 8,
     "simplifyPt": 1.0,
-    "floorColours": ["stages"],
+    "floorColours": [
+      "stages"
+    ],
     "maxPageShare": 0.08,
     "_perRoom": "Settings for one room, by its printed name. Smaller doorPt/openingPt keep narrow corridors that belong to an open foyer (but would let a small room leak through its doors).",
     "perRoom": {
-      "Third Floor Foyer": {"doorPt": 8, "openingPt": 12, "why": "includes the corridors to the toilets and both staircases (decided 3 Nov)"},
-      "Arnheim-Foyer": {"doorPt": 8, "openingPt": 12, "why": "includes the strip along the outer wall by the bench"}
+      "Third Floor Foyer": {
+        "doorPt": 8,
+        "openingPt": 12,
+        "why": "includes the corridors to the toilets and both staircases (decided 3 Nov)"
+      },
+      "Arnheim-Foyer": {
+        "doorPt": 8,
+        "openingPt": 12,
+        "why": "includes the strip along the outer wall by the bench"
+      }
     },
     "_dividers": "Lines (pt) drawn in as walls before tracing, where an open area holds rooms the plan has no wall between. Each: floor id, line, why.",
     "dividers": [
-      {"floor": "1", "line": [[185, 615], [430, 708]], "why": "Humboldt Hall / Cafeteria: along the cafeteria's bottom wall and the pillars"},
-      {"floor": "2", "line": [[240, 601], [620, 601]], "why": "Edison / 2nd-floor foyer: along the wall with the double doors"},
-      {"floor": "3", "line": [[270, 599.5], [600, 599.5]], "why": "Third Floor Foyer / Voltaire: the folding partition along the row of pillars"}
+      {
+        "floor": "1",
+        "line": [
+          [
+            185,
+            615
+          ],
+          [
+            430,
+            708
+          ]
+        ],
+        "why": "Humboldt Hall / Cafeteria: along the cafeteria's bottom wall and the pillars"
+      },
+      {
+        "floor": "2",
+        "line": [
+          [
+            240,
+            601
+          ],
+          [
+            620,
+            601
+          ]
+        ],
+        "why": "Edison / 2nd-floor foyer: along the wall with the double doors"
+      },
+      {
+        "floor": "3",
+        "line": [
+          [
+            270,
+            599.5
+          ],
+          [
+            600,
+            599.5
+          ]
+        ],
+        "why": "Third Floor Foyer / Voltaire: the folding partition along the row of pillars"
+      }
     ]
   },
   "floors": [
@@ -81,7 +130,7 @@
       "color": "#111111"
     }
   ],
-  "_categoriesComment": "link = the word used after ?cat= in shareable links (old ?cat=<id> links keep working; never reuse a word). enabled:false = extracted for review but left out of data/overlay.json until Emily confirms (brief section 6).",
+  "_categoriesComment": "link = the word used after ?cat= in shareable links (old ?cat=<id> links keep working; never reuse a word). oldLinks = ids and words of categories merged into this one (8 Nov 2026: Org fair + Project fair -> fairs), so links already shared keep working. enabled:false = extracted for review but left out of data/overlay.json until Emily confirms (brief section 6).",
   "categories": [
     {
       "id": "toilets",
@@ -96,7 +145,7 @@
       "label": "Food & snacks",
       "link": "hungry",
       "icon": "food",
-      "color": "#0D3858",
+      "color": "#CC3233",
       "enabled": true
     },
     {
@@ -117,27 +166,29 @@
       "enabled": true
     },
     {
-      "id": "charging",
-      "label": "Charging",
-      "link": "charging",
-      "icon": "bolt",
-      "color": "#E08A00",
-      "enabled": true
-    },
-    {
-      "id": "org-fair",
-      "label": "Org fair",
+      "id": "fairs",
+      "label": "Fairs & booths",
       "link": "hunting",
+      "oldLinks": [
+        "org-fair",
+        "project-fair",
+        "curious"
+      ],
       "icon": "booth",
-      "color": "#E8402A",
+      "color": "#F9317C",
       "enabled": true
     },
     {
-      "id": "project-fair",
-      "label": "Project fair",
-      "link": "curious",
-      "icon": "flask",
-      "color": "#2A6FDB",
+      "id": "extra",
+      "label": "Extras",
+      "link": "wandering",
+      "oldLinks": [
+        "charging",
+        "museum",
+        "inspecting"
+      ],
+      "icon": "star",
+      "color": "#0F9D8A",
       "enabled": true
     },
     {
@@ -453,19 +504,71 @@
   "labelCategories": [
     {
       "match": "^catering$",
-      "category": "food"
+      "category": "food",
+      "id": "food",
+      "name": "Catering",
+      "nameNearestRoom": true,
+      "aliases": [
+        "Catering",
+        "Food",
+        "Snacks",
+        "Coffee"
+      ]
     },
     {
       "match": "^project fair$",
-      "category": "project-fair"
+      "category": "fairs",
+      "id": "project-fair",
+      "name": "Project fair",
+      "aliases": [
+        "projects",
+        "posters"
+      ]
     },
     {
       "match": "^organi[sz]ations? fair$",
-      "category": "org-fair"
+      "category": "fairs",
+      "id": "org-fair-area",
+      "name": "Organisations Fair",
+      "aliases": [
+        "Org fair",
+        "organizations",
+        "booths",
+        "career fair"
+      ],
+      "needsBox": true
+    },
+    {
+      "match": "effektiv spenden|gwwc",
+      "category": "fairs",
+      "id": "gwwc-booth",
+      "name": "Effektiv Spenden + GWWC",
+      "aliases": [
+        "Giving What We Can",
+        "Effektiv Spenden",
+        "GWWC",
+        "donations",
+        "giving"
+      ]
+    },
+    {
+      "match": "museum|^ai safety & society$",
+      "category": "extra",
+      "id": "museum",
+      "name": "AI Safety & Society Museum",
+      "aliases": [
+        "AIS Museum",
+        "exhibition",
+        "exhibit",
+        "AI safety",
+        "museum"
+      ]
     },
     {
       "match": "charging",
-      "category": "charging"
+      "category": "extra",
+      "id": "charging",
+      "name": "Charging station"
     }
   ],
   "ignoreLabels": [
@@ -482,21 +585,81 @@
     843,
     1191
   ],
-  "titleMaxY": 230,
+  "titleMaxY": 212,
   "boxesOnlyWhenSelected": [
-    "org-fair"
+    "fairs"
   ],
-  "_hiddenArrows": "Arrow tips (PDF pt) per floor; the arrow ending there is never shown (except with 'All labels'). Ground floor: the Org fair title's top and bottom arrows.",
-  "hiddenArrows": {
-    "0": [
-      [
-        385.7,
-        458.6
+  "_labelCategoriesComment": "Printed labels that name a category. id = the item id's start (item ids end up in QR codes: don't change it once printed); name/aliases = what the app shows and finds; nameNearestRoom = add the nearest room's name ('Catering · Cafeteria'); needsBox = only an area box counts (no pin at the label).",
+  "areaBoxes": [
+    {
+      "rgb": [
+        249,
+        49,
+        124
       ],
-      [
-        306.9,
-        587.0
-      ]
-    ]
-  }
+      "category": "fairs",
+      "why": "pink Org fair boxes"
+    },
+    {
+      "rgb": [
+        240,
+        77,
+        35
+      ],
+      "category": "fairs",
+      "why": "orange Effektiv Spenden + GWWC box (1st floor)"
+    },
+    {
+      "rgb": [
+        204,
+        50,
+        51
+      ],
+      "category": "food",
+      "why": "red catering boxes"
+    },
+    {
+      "rgb": [
+        32,
+        118,
+        236
+      ],
+      "category": "extra",
+      "why": "blue AI Safety & Society Museum boxes"
+    }
+  ],
+  "_areaBoxesComment": "Boxes drawn in Canva round an area, by colour (RGB, tolerance 30 unless given). The box becomes the highlighted area of the nearest label of that category. A box in a colour not listed here is reported and skipped.",
+  "_hiddenArrows": "Arrow tips (PDF pt) per floor; the arrow ending there is never shown (except with 'All labels'). Empty since the 8 Nov PDF (the Org fair arrows are gone).",
+  "hiddenArrows": {},
+  "_acknowledgedComment": "Report lines the owner has already decided (regex). They go to a short 'Already decided' list at the end of the report instead of 'Things to check'.",
+  "acknowledged": [
+    {
+      "match": "is painted over by a box in Canva",
+      "why": "2 Nov 2026: areas painted over with grey boxes are closed off"
+    },
+    {
+      "match": "Hidden text under the floor-plan picture",
+      "why": "2 Nov 2026: hidden old text on the 2nd floor is stale"
+    },
+    {
+      "match": "Not published \\(category switched off\\): stages",
+      "why": "stages extracted but not shown (decided 2 Nov 2026)"
+    },
+    {
+      "match": "Near-duplicate shade: #84CB3D|Near-duplicate shade: #84CC3D",
+      "why": "green Spontaneous Conversation Area box: a room, not a lift"
+    },
+    {
+      "match": "Colour #846C0C covers",
+      "why": "dark-yellow stair edge on the ground floor"
+    },
+    {
+      "match": "Near-duplicate shade: #FF822D",
+      "why": "orange lightning of the charging label: the Charging colour, not stairs"
+    },
+    {
+      "match": "Meeting point C4: another label is almost as close",
+      "why": "checked 8 Nov 2026 on the review picture: C4 is the pin beside the Kleist Hall label, C6 the one its arrow points at"
+    }
+  ]
 }

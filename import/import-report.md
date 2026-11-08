@@ -1,6 +1,6 @@
 # Import report
 
-Generated 2026-11-05T17:35:05+01:00 from `source/attendee-map.pdf` by `scripts/import.py`. Review pictures (every item drawn on the plan, red outline = shape, dot = pin, label = item id): [Ground floor](review/0.jpg), [1st floor](review/1.jpg), [2nd floor](review/2.jpg), [3rd floor](review/3.jpg).
+Generated 2026-11-08T12:24:20+01:00 from `source/attendee-map.pdf` by `scripts/import.py`. Review pictures (every item drawn on the plan, red outline = shape, dot = pin, label = item id): [Ground floor](review/0.jpg), [1st floor](review/1.jpg), [2nd floor](review/2.jpg), [3rd floor](review/3.jpg).
 
 ## What the PDF contains
 
@@ -11,34 +11,34 @@ Generated 2026-11-05T17:35:05+01:00 from `source/attendee-map.pdf` by `scripts/i
 
 ## Counts per floor
 
-| Floor | Food & snacks | Lift | Org fair areas | Project fair | Spiral stairs | Stage | Stairs | Toilets | meeting points | rooms | rooms with outline |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| Ground floor | 1 | 2 | 3 | 0 | 0 | 0 | 3 | 1 | 4 | 8 | 5 |
-| 1st floor | 1 | 2 | 0 | 1 | 0 | 3 | 4 | 2 | 6 | 6 | 6 |
-| 2nd floor | 0 | 1 | 0 | 0 | 1 | 1 | 2 | 2 | 3 | 5 | 5 |
-| 3rd floor | 1 | 1 | 0 | 0 | 1 | 1 | 2 | 2 | 4 | 5 | 5 |
+| Floor | Extras boxes | Fairs & booths boxes | Fairs & booths pins | Food & snacks boxes | Lift | Spiral stairs | Stage | Stairs | Toilets | meeting points | rooms | rooms with outline |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Ground floor | 3 | 3 | 0 | 1 | 2 | 0 | 0 | 3 | 1 | 4 | 8 | 5 |
+| 1st floor | 0 | 1 | 1 | 1 | 2 | 0 | 3 | 4 | 2 | 6 | 6 | 6 |
+| 2nd floor | 0 | 0 | 0 | 0 | 1 | 1 | 1 | 2 | 2 | 3 | 5 | 5 |
+| 3rd floor | 0 | 0 | 0 | 1 | 1 | 1 | 1 | 2 | 2 | 4 | 5 | 5 |
 
 Generated items: 80. Published in `data/overlay.json`: 75.
 
 ## Things to check (numbered so you can answer by number)
 
-1. **Ground floor**: Meeting point D3: label is 198 pt from its pin (joined by an arrow?). Paired anyway - check.
-2. **Ground floor**: Meeting point D3: another label is almost as close to its pin - check the pin is the right one.
-3. **Ground floor**: "Charging Station": placed at arrow tip. Check the position on site.
-4. **Ground floor**: Lift at (738, 380) is painted over by a box in Canva - left out. Is it closed/not for attendees?
-5. **Ground floor**: Colour #846C0C covers ~221 pt² but is not in the colour key.
-6. **Ground floor**: Prayer Room: label is outside the building; followed its lines to 1 room(s). Check on the review picture.
-7. **Ground floor**: Parents Room: label is outside the building; followed its lines to 1 room(s). Check on the review picture.
-8. **Ground floor**: Nap Rooms: label is outside the building; followed its lines to 4 room(s). Check on the review picture.
-9. **Ground floor**: Rooms without an outline (pin only, at the label): Outside Area 1:1s (label is outside the building; no lines to follow); Registration / Info Desk / Wardrobe (outline found was smaller than the label (furniture/seats in the way?)); Main entrance (label is outside the building; no lines to follow)
-10. **1st floor**: Meeting point C4: another label is almost as close to its pin - check the pin is the right one.
-11. **1st floor**: Meeting point C5: label is 85 pt from its pin (joined by an arrow?). Paired anyway - check.
-12. **1st floor**: Stairs at (762, 296) is painted over by a box in Canva - left out. Is it closed/not for attendees?
-13. **2nd floor**: Hidden text under the floor-plan picture was ignored (old labels left in Canva behind the image?): "Austen Kids Room"; "Networking 1:1s Spontaneous Conversation area"; "0, 1, 3"; "To floors 1 & 3"; "Point 3 - Conversation Area"; "Second Floor Foyer"; "To floor 3"; "Edison Workshops / Meet-ups"; "Darwin Speaker Room"; "Newton Office Hours"
-14. **2nd floor**: Lift at (635, 537) is painted over by a box in Canva - left out. Is it closed/not for attendees?
-15. **3rd floor**: Lift at (640, 534) is painted over by a box in Canva - left out. Is it closed/not for attendees?
-16. **all**: Near-duplicate shade: #84CC3D (drawn in Canva) is close to the Elevators colour but not the same. If it means the same thing, use the exact colour; if not, consider a more distinct one.
-17. **overrides**: Not published (category switched off): stages
+1. **Ground floor**: Prayer Room: label is outside the building; followed its lines to 1 room(s). Check on the review picture.
+2. **Ground floor**: Parents Room: label is outside the building; followed its lines to 1 room(s). Check on the review picture.
+3. **Ground floor**: Nap Rooms: label is outside the building; followed its lines to 3 room(s). Check on the review picture.
+4. **Ground floor**: Rooms without an outline (pin only, at the label): Outside Area 1:1s (label is outside the building; no lines to follow); Registration / Info Desk / Wardrobe (outline found was smaller than the label (furniture/seats in the way?)); Main entrance (label is outside the building; no lines to follow)
+
+## Already decided (acknowledged in `scripts/import-config.json`)
+
+- **Ground floor**: Lift at (790, 381) is painted over by a box in Canva - left out. Is it closed/not for attendees? *(2 Nov 2026: areas painted over with grey boxes are closed off)*
+- **Ground floor**: Colour #846C0C covers ~218 pt² but is not in the colour key. *(dark-yellow stair edge on the ground floor)*
+- **1st floor**: Meeting point C4: another label is almost as close to its pin - check the pin is the right one. *(checked 8 Nov 2026 on the review picture: C4 is the pin beside the Kleist Hall label, C6 the one its arrow points at)*
+- **1st floor**: Stairs at (762, 296) is painted over by a box in Canva - left out. Is it closed/not for attendees? *(2 Nov 2026: areas painted over with grey boxes are closed off)*
+- **2nd floor**: Hidden text under the floor-plan picture was ignored (old labels left in Canva behind the image?): "Austen Kids Room"; "Networking 1:1s Spontaneous Conversation area"; "0, 1, 3"; "To floors 1 & 3"; "Point 3 - Conversation Area"; "Second Floor Foyer"; "To floor 3"; "Edison Workshops / Meet-ups"; "Darwin Speaker Room"; "Newton Office Hours" *(2 Nov 2026: hidden old text on the 2nd floor is stale)*
+- **2nd floor**: Lift at (635, 537) is painted over by a box in Canva - left out. Is it closed/not for attendees? *(2 Nov 2026: areas painted over with grey boxes are closed off)*
+- **3rd floor**: Lift at (640, 534) is painted over by a box in Canva - left out. Is it closed/not for attendees? *(2 Nov 2026: areas painted over with grey boxes are closed off)*
+- **all**: Near-duplicate shade: #84CC3D (drawn in Canva) is close to the Elevators colour but not the same. If it means the same thing, use the exact colour; if not, consider a more distinct one. *(green Spontaneous Conversation Area box: a room, not a lift)*
+- **all**: Near-duplicate shade: #FF822D (drawn in Canva) is close to the Stairs colour but not the same. If it means the same thing, use the exact colour; if not, consider a more distinct one. *(orange lightning of the charging label: the Charging colour, not stairs)*
+- **overrides**: Not published (category switched off): stages *(stages extracted but not shown (decided 2 Nov 2026))*
 
 ## How to fix things
 

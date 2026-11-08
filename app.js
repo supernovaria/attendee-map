@@ -7,6 +7,13 @@
   // links: an item has its own page at p/<id>/ (scripts/pages.py, for link previews); its
   // <base> points at the site root, so SITE is the root on every page
   const SITE = new URL('./', document.baseURI);
+  // Pin it, on every page: relative addresses are read against the address
+  // bar, which replaceState changes. Selecting an item makes it .../p/<id>/,
+  // and on the main page (no <base>) every floor picture loaded afterwards
+  // was looked for in p/<id>/maps/ (404: the map lost its background). On item
+  // pages a relative <base> ("../../") had the same problem the other way round.
+  const baseEl = document.querySelector('base') || document.head.appendChild(document.createElement('base'));
+  baseEl.setAttribute('href', SITE.href);
   const itemPath = (id) => `p/${encodeURIComponent(id)}/`;
   const pathItem = () => { const m = location.pathname.match(/\/p\/([^/]+)\/?$/); return m ? decodeURIComponent(m[1]) : null; };
 
@@ -28,18 +35,51 @@
     firstaid: 'M10 3h4v7h7v4h-7v7h-4v-7H3v-4h7z',
     quiet: 'M20 15.5A8.5 8.5 0 1 1 8.5 4a7 7 0 0 0 11.5 11.5z',
     registration: 'M4 4h16v16H4zm2 2v12h12V6zm2 2h8v2H8zm0 4h8v2H8z',
+    museum: 'M12 2 2 7v2h20V7zM4 10.5h2.5V18H4zm4.75 0h2.5V18h-2.5zm4 0h2.5V18h-2.5zm4.75 0H20V18h-2.5zM2 19.5h20V22H2z',
     dot: 'M12 6a6 6 0 1 1 0 12 6 6 0 0 1 0-12z',
+    star: 'M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z', // Extra
+    chat: 'M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z', // conversations
+    diamond: { emoji: '🔶' }, // donations (Effektiv Spenden & GWWC)
   };
   function iconMarkup(name) {
     const ic = ICONS[name] || ICONS.dot;
+    if (ic.emoji) return `<text class="emoji" x="12" y="11" text-anchor="middle" dominant-baseline="central" font-size="15">${ic.emoji}</text>`;
     if (typeof ic === 'object') {
       return `<text x="12" y="12.5" text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="700">${ic.text}</text>`;
     }
     return `<path d="${ic}"/>`;
   }
   function catDot(cat, size = 30) {
-    return `<span class="cat-dot" style="background:${cat.color || '#555'};width:${size}px;height:${size}px" aria-hidden="true"><svg viewBox="0 0 24 24">${iconMarkup(cat.icon)}</svg></span>`;
+    // an emoji icon has its own colours: white dot, ring in the item's colour
+    const bg = ICONS[cat.icon]?.emoji ? `#fff;box-shadow:inset 0 0 0 2.5px ${cat.color || '#555'}` : cat.color || '#555';
+    return `<span class="cat-dot" style="background:${bg};width:${size}px;height:${size}px" aria-hidden="true"><svg viewBox="0 0 24 24">${iconMarkup(cat.icon)}</svg></span>`;
   }
+  // A chip for several things shows their icons stacked, the first in front:
+  // Stairs & lifts (its categories), a cardList category (its items' own icons
+  // in list order: Fairs & booths, Extras). The stack is as wide as two dots
+  // however many there are (style.css, --n).
+  function groupDot(cid, size = 30) {
+    const c = S.catById[cid], m = members(cid);
+    const seen = new Set();
+    const looks = (m.length > 1 ? m : c.cardList ? listItems(cid).map(look) : [c])
+      .filter((l) => { const k = l.icon + l.color; return !seen.has(k) && seen.add(k); });
+    if (looks.length < 2) return catDot(c, size);
+    return `<span class="dot-stack" style="--n:${looks.length}">` +
+      looks.map((l, i) => catDot(l, size).replace('style="', `style="z-index:${looks.length - i};`)).join('') + '</span>';
+  }
+  // a cardList category's items in card order (item.order, then floor, then name)
+  const listItems = (cid) => S.items.filter((i) => inCat(i, cid))
+    .sort((x, y) => (x.order ?? 999) - (y.order ?? 999) || (S.floorById[x.floor].order ?? 0) - (S.floorById[y.floor].order ?? 0) || x.name.localeCompare(y.name));
+
+  // Chip groups: a category with chipWith shows on that category's chip, so
+  // selecting "Stairs & lifts" (S.cat = 'stairs') highlights the lifts too.
+  const members = (cid) => [S.catById[cid], ...S.cats.filter((c) => c.chipWith === cid)].filter(Boolean);
+  // an item's own colour/icon (item.color, item.icon) over its category's: the
+  // fairs share a category but keep their printed colours
+  const look = (it) => { const c = S.catById[it.category]; return { ...c, color: it.color || c.color, icon: it.icon || c.icon }; };
+  const inCat = (it, cid) => it.category === cid || S.catById[it.category].chipWith === cid;
+  const chipOf = (cid) => (S.catById[cid] && S.catById[S.catById[cid].chipWith] ? S.catById[cid].chipWith : cid);
+  const catTitle = (c) => (members(c.id).length > 1 && c.chipLabel) || c.label;
 
   // ---------------------------------------------------------------- helpers
   const $ = (id) => document.getElementById(id);
@@ -132,6 +172,8 @@
     S.catByLink = {};
     S.cats.forEach((c) => (S.catByLink[c.id] = c));
     S.cats.forEach((c) => c.link && (S.catByLink[c.link] = c));
+    // categories merged into this one (Org fair + Project fair -> fairs): their links still work
+    S.cats.forEach((c) => (c.oldLinks || []).forEach((w) => (S.catByLink[w] = S.catByLink[w] || c)));
     S.items = (data.items || []).filter((it) => it && it.id && S.floorById[it.floor] && S.catById[it.category] && Array.isArray(it.pin));
     S.items.forEach((it) => {
       S.itemById[it.id] = it;
@@ -302,7 +344,14 @@
     if (bgs[f.id]) return bgs[f.id];
     const img = layerImg(f, pic(f, 'background'), bgLayer);
     img.addEventListener('load', () => { if (f.id === S.floor) $('loading').hidden = true; });
-    img.addEventListener('error', () => { if (f.id === S.floor) $('loading').textContent = 'Could not load this floor plan.'; });
+    // a dropped download (venue Wi-Fi): try again by itself, three times
+    let tries = 0;
+    img.addEventListener('error', () => {
+      if (tries < 3) {
+        tries++;
+        setTimeout(() => img.setAttribute('href', `${pic(f, 'background')}${pic(f, 'background').includes('?') ? '&' : '?'}retry=${tries}`), 800 * tries);
+      } else if (f.id === S.floor) $('loading').textContent = 'Could not load this floor plan. Check your connection and reload.';
+    });
     bgs[f.id] = img;
     return img;
   }
@@ -532,14 +581,14 @@
     const f = S.floorById[S.floor];
     const cat = S.cat && S.catById[S.cat];
     // floor tabs
-    const floorsWithCat = new Set(cat ? S.items.filter((i) => i.category === cat.id).map((i) => i.floor) : []);
+    const floorsWithCat = new Set(cat ? S.items.filter((i) => inCat(i, cat.id)).map((i) => i.floor) : []);
     document.querySelectorAll('#floors button').forEach((b) => {
       const on = b.dataset.floor === S.floor;
       b.setAttribute('aria-selected', on);
       b.tabIndex = on ? 0 : -1;
       const dot = floorsWithCat.has(b.dataset.floor);
       b.innerHTML = `<span>${esc(S.floorById[b.dataset.floor].shortName || S.floorById[b.dataset.floor].name)}</span>` +
-        (dot ? `<span class="has" style="background:${cat.color || 'currentColor'}" title="Has ${esc(cat.label)}"></span>` : '');
+        (dot ? `<span class="has" style="background:${cat.color || 'currentColor'}" title="Has ${esc(catTitle(cat))}"></span>` : '');
     });
     // chips
     document.querySelectorAll('.chip').forEach((b) => b.setAttribute('aria-pressed', b.dataset.cat === S.cat));
@@ -549,7 +598,7 @@
     let hl = [];
     if (S.item) hl = [S.itemById[S.item]];
     else if (S.way) hl = [...S.way.lifts, ...S.way.stairs];
-    else if (cat) hl = S.items.filter((i) => i.category === cat.id && i.floor === f.id);
+    else if (cat) hl = S.items.filter((i) => inCat(i, cat.id) && i.floor === f.id);
     const dimOn = !!(S.item || cat || S.way);
     const layered = !!f.backgroundHighlight;
     dimRect.style.opacity = dimOn ? 1 : 0;
@@ -566,7 +615,7 @@
     el('rect', { x: 0, y: 0, width: f.width, height: f.height, fill: '#fff' }, maskG);
     if (layered && hl.some((i) => i._pts)) ensureFull(f);
     for (const it of hl) {
-      const c = S.catById[it.category].color || '#e33';
+      const c = look(it).color || '#e33';
       if (it._polys.length) {
         for (const poly of it._polys) {
           const d = poly.map((p) => p.join(',')).join(' ');
@@ -648,7 +697,7 @@
       // printed pins/labels already show where things are; a marker only for
       // the searched/tapped item, or things with nothing printed on the plan
       if (S.item !== it.id && (it.labelBoxes?.length || it._pts)) continue;
-      const cat = S.catById[it.category];
+      const cat = look(it);
       const ripple = S.item === it.id && !it._polys.length && performance.now() - S.pulseAt < 3500;
       if (cat.marker === false) {
         // the plan prints its own pin here (meeting points): a second one
@@ -670,6 +719,7 @@
       // teardrop: the tip is exactly on the spot, the head floats above it
       const g = el('g', { class: 'marker', transform: `translate(${sx} ${sy})` }, markerLayer);
       el('path', { class: 'bg', d: 'M0 0C-3-7-14-13-14-24a14 14 0 1 1 28 0C14-13 3-7 0 0z', fill: cat.color || '#555' }, g);
+      if (ICONS[cat.icon]?.emoji) el('circle', { cx: 0, cy: -24, r: 10.5, fill: '#fff' }, g);
       const ig = el('g', { class: 'glyph', transform: 'translate(-9 -33) scale(0.75)' }, g);
       ig.innerHTML = iconMarkup(cat.icon);
     }
@@ -679,8 +729,9 @@
   function renderSheet(hl, cat, floorsWithCat) {
     const sh = $('sheet');
     const close = `<button class="icon-btn close" aria-label="Clear"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg></button>`;
-    const floorLinks = (ids) => S.floors.filter((f) => ids.has(f.id) && f.id !== S.floor)
-      .map((f) => `<button data-goto="${esc(f.id)}">${esc(f.name)}</button>`).join('');
+    // a pill per floor; the one you're on has the same hairline as its floor tab
+    const pill = (f) => `<button data-goto="${esc(f.id)}"${f.id === S.floor ? ' class="cur"' : ''} style="--fc:${esc(f.color || 'transparent')}">${esc(f.name)}</button>`;
+    const floorPills = (ids) => S.floors.filter((f) => ids.has(f.id)).map(pill).join('');
     if (!S.item && S.way) {
       const w = S.way, it = S.itemById[w.item], tf = S.floorById[w.to];
       const ff = S.floorById[w.from];
@@ -695,28 +746,43 @@
         `<div class="links strong"><button data-goitem="${esc(it.id)}">Go to the ${esc(tf.name)}</button></div></div>${close}`;
     } else if (S.item) {
       const it = S.itemById[S.item], c = S.catById[it.category];
-      const n = S.items.filter((i) => i.category === c.id).length;
-      const allBtn = c.chip !== false && n > 1 ? `<button data-cat="${esc(c.id)}">All ${esc(c.label)} (${n})</button>` : '';
-      const share = `<button data-share="1">${navigator.share ? 'Share' : 'Copy link'}</button>`;
+      const g = S.catById[chipOf(c.id)]; // lifts: "All Stairs & lifts"
+      const n = S.items.filter((i) => inCat(i, g.id)).length;
+      const allBtn = g.chip !== false && n > 1 ? `<button data-cat="${esc(g.id)}">All ${esc(catTitle(g))} (${n})</button>` : '';
       // item.links: buttons that open a web page (e.g. directions to the entrance)
       const ext = (Array.isArray(it.links) ? it.links : []).filter((l) => l && l.label && /^https:\/\//.test(l.url))
         .map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('');
-      // came from another floor (search, link, or the "You are here" floor): offer the way there
-      const from = S.here ? S.here.floor : S.cameFrom;
-      const way = from && from !== it.floor && S.floorById[from]
-        ? `<button data-way="${esc(from)}">How to get here from the ${esc(S.floorById[from].name)}</button>` : '';
-      const links = `<div class="links">${way}${ext}${share}${allBtn}</div>`;
-      sh.innerHTML = `${dotBtn(c, 'Show it on the map')}<div class="grow"><div class="name">${esc(it.name)}</div>` +
+      const links = `<div class="links">${shareBtn(it.id)}${ext}${allBtn}</div>`;
+      sh.innerHTML = `${dotBtn(look(it), 'Show it on the map')}<div class="grow"><div class="name">${esc(it.name)}</div>` +
         `<div class="sub">${esc([it.description, c.label, S.floorById[it.floor].name].filter(Boolean).join(' · '))}</div>${links}</div>${close}`;
     } else if (cat) {
       const n = hl.length;
-      const others = floorLinks(floorsWithCat);
-      let txt;
-      if (!floorsWithCat.size) txt = `${esc(cat.label)}: not on the map yet.`;
-      else if (!n) txt = `<span class="none">No ${esc(cat.label)} on the ${esc(S.floorById[S.floor].name)}</span><br>Go to:`;
-      else txt = `${esc(cat.label)}: ${n} on this floor.` + (others ? ' Also on:' : '');
-      sh.innerHTML = (n ? dotBtn(cat, `Show all ${cat.label} on this floor`) : catDot(cat)) + `<div class="grow"><div class="name">${txt}</div>` +
-        (others ? `<div class="links${n ? '' : ' strong'}">${others}</div>` : '') + `</div>${close}`;
+      const pills = floorPills(floorsWithCat);
+      const title = catTitle(cat), group = members(cat.id);
+      const here = S.floorById[S.floor].name;
+      const none = `<span class="none">No ${esc(title)} on the ${esc(here)}</span>`;
+      if (!floorsWithCat.size) {
+        sh.innerHTML = `${catDot(cat)}<div class="grow"><div class="name">${esc(title)}: not on the map yet.</div></div>${close}`;
+      } else if (cat.cardList) {
+        // one line per item, with its floor (Fairs & booths: each fair is on one floor)
+        const list = listItems(cat.id);
+        // tapping a name shows it (on its floor) and stays on this card; the link icon shares it
+        const rows = list.map((i) => `<li><button class="item-name" data-zoom="${esc(i.id)}" title="Show it on the map">${catDot(look(i), 26)}<span>${esc(i.name)}</span></button>` +
+          `<span class="links">${shareBtn(i.id)}${pill(S.floorById[i.floor])}</span></li>`).join('');
+        sh.innerHTML = `<div class="grow"><div class="name">${esc(title)}</div><ul class="item-lines">${rows}</ul></div>${close}`;
+      } else if (group.length > 1) {
+        // a line per category, each with its own round icon (Stairs 3 / Lifts 1)
+        const rows = group.map((c) => {
+          const k = hl.filter((i) => i.category === c.id).length;
+          return `<li>${k ? dotBtn(c, `Show the ${c.label} on this floor`, c.id) : catDot(c)}<span>${esc(c.label)}: <b>${k || '<span class="muted">none on this floor</span>'}</b></span></li>`;
+        }).join('');
+        sh.innerHTML = `<div class="grow"><div class="name">${n ? `${esc(title)} on the ${esc(here)}` : none}</div>` +
+          `<ul class="cat-lines">${rows}</ul><div class="links">${pills}</div></div>${close}`;
+      } else {
+        sh.innerHTML = (n ? dotBtn(cat, `Show all ${title} on this floor`) : catDot(cat)) +
+          `<div class="grow"><div class="name">${n ? `${esc(title)}: ${n} on this floor` : none}</div>` +
+          `<div class="links">${pills}</div></div>${close}`;
+      }
     } else {
       sh.hidden = true;
       return;
@@ -727,7 +793,7 @@
     sh.querySelectorAll('[data-goitem]').forEach((b) => (b.onclick = () => { const from = S.floor; S.way = null; selectItem(b.dataset.goitem); S.cameFrom = from; render(); }));
     sh.querySelectorAll('[data-goto]').forEach((b) => (b.onclick = () => setFloor(b.dataset.goto)));
     sh.querySelectorAll('[data-cat]').forEach((b) => (b.onclick = () => selectCat(b.dataset.cat, { force: true, keepFloor: true })));
-    const dot = sh.querySelector('.dot-btn');
+    const dots = [...sh.querySelectorAll('.dot-btn')], dot = dots[0];
     if (dot && !dotSeen) {
       // once per selection (HINT_MS, see .dot-btn.hint in style.css). The card is
       // redrawn now and then (pictures loading, Aa …): the rings carry on where
@@ -737,22 +803,38 @@
       const t = performance.now() - hintAt;
       if (t < HINT_MS) {
         dot.classList.add('hint');
-        dot.style.setProperty('--hint', (S.item ? S.catById[S.itemById[S.item].category] : cat).color || 'var(--accent)');
+        dot.style.setProperty('--hint', (S.item ? look(S.itemById[S.item]) : S.catById[dot.dataset.dot] || cat).color || 'var(--accent)');
         dot.style.setProperty('--hint-delay', (500 - t) / 1000 + 's');
       }
     }
-    if (dot) dot.onclick = () => {
+    // round icon: show and outline what the card is about (data-dot: only that category,
+    // e.g. the lifts on the Stairs & lifts card)
+    dots.forEach((d) => (d.onclick = () => {
       if (!dotSeen) {
         dotSeen = true;
-        dot.classList.remove('hint');
+        dots.forEach((x) => x.classList.remove('hint'));
         try { localStorage.setItem('venueMap.dotSeen', '1'); } catch (e) { /* ignore */ }
       }
+      const items = d.dataset.dot ? S.hl.filter((i) => i.category === d.dataset.dot) : S.hl;
       if (S.item) { S.pulseAt = performance.now(); centreOn(S.itemById[S.item]); setTimeout(placeMarkers, 3600); }
-      else showItems(withHere(S.hl));
-      traceOutlines(S.hl);
-    };
-    const shareBtn = sh.querySelector('[data-share]');
-    if (shareBtn) shareBtn.onclick = () => shareItem(S.itemById[S.item]);
+      else showItems(withHere(items));
+      traceOutlines(items);
+    }));
+    sh.querySelectorAll('[data-share]').forEach((b) => (b.onclick = () => shareItem(S.itemById[b.dataset.share])));
+    // a line of a list card: go to its floor and outline it. Like the round
+    // icons: keep the zoom unless it doesn't fit, pan only if needed
+    sh.querySelectorAll('[data-zoom]').forEach((b) => (b.onclick = () => {
+      const it = S.itemById[b.dataset.zoom];
+      if (it.floor !== S.floor) setFloor(it.floor);
+      showItems([it]);
+      traceOutlines([it]);
+    }));
+  }
+  // the classic chain-link icon: share sheet on phones, copy the link elsewhere
+  function shareBtn(id) {
+    const label = navigator.share ? 'Share' : 'Copy link';
+    return `<button class="link-btn" data-share="${esc(id)}" aria-label="${label}" title="${label}">` +
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></button>';
   }
   // Draw an outline around the things the card shows, keep it a moment, then
   // fade it out (timing: .trace in style.css). Shapes get their outline,
@@ -774,7 +856,7 @@
     const cls = quick ? ' quick' : '';
     for (const it of items || []) {
       if (quick && !it._polys.length) continue;
-      const c = S.catById[it.category].color || '#e33';
+      const c = look(it).color || '#e33';
       const shapes = it._polys.length
         ? it._polys.map((poly) => ['polygon', { points: poly.map((q) => q.join(',')).join(' ') }])
         : [['circle', { cx: it.pin[0], cy: it.pin[1], r: 26 / k }]];
@@ -785,8 +867,8 @@
     }
     traceT = setTimeout(() => (traceLayer.innerHTML = ''), (quick ? TRACE_QUICK_MS : TRACE_MS) + 100);
   }
-  function dotBtn(c, label) {
-    return `<button class="dot-btn" aria-label="${esc(label)}" title="${esc(label)}">${catDot(c)}</button>`;
+  function dotBtn(c, label, only) {
+    return `<button class="dot-btn"${only ? ` data-dot="${esc(only)}"` : ''} aria-label="${esc(label)}" title="${esc(label)}">${catDot(c)}</button>`;
   }
   // "meet me at C3": a link that opens the map on that spot
   function shareItem(it) {
@@ -815,11 +897,11 @@
     const box = $('chips');
     box.innerHTML = '';
     for (const c of S.cats) {
-      if (c.chip === false) continue;
+      if (c.chip === false || (c.chipWith && S.catById[c.chipWith])) continue;
       const b = document.createElement('button');
       b.className = 'chip';
       b.dataset.cat = c.id;
-      b.innerHTML = `${catDot(c, 32)}<span>${esc(c.label)}</span>`;
+      b.innerHTML = `${groupDot(c.id, 32)}<span>${esc(catTitle(c))}</span>`;
       b.addEventListener('click', () => selectCat(c.id));
       box.appendChild(b);
     }
@@ -867,12 +949,12 @@
     S.way = null;
     S.item = null;
     const c = S.catById[id];
-    const floors = [...new Set(S.items.filter((i) => i.category === id).map((i) => i.floor))];
+    const floors = [...new Set(S.items.filter((i) => inCat(i, id)).map((i) => i.floor))];
     // "lives on one floor": explicit category.floor, or all its items are on one floor
     const target = (c.floor && S.floorById[c.floor]) ? c.floor : (floors.length === 1 ? floors[0] : null);
     if (target && target !== S.floor && !opts.keepFloor) {
       setFloor(target, opts);
-      if (S.ready) toast(`${c.label}: ${S.floorById[target].name}`);
+      if (S.ready) toast(`${catTitle(c)}: ${S.floorById[target].name}`);
     } else {
       render(opts);
       if (S.ready) {
@@ -1014,14 +1096,14 @@
     let best = null, bd = 22;
     for (const it of here) {
       const d = Math.hypot(it.pin[0] - wx, it.pin[1] - wy) * k;
-      if (d < bd && (!S.cat || it.category === S.cat)) { bd = d; best = it; }
+      if (d < bd && (!S.cat || inCat(it, S.cat))) { bd = d; best = it; }
     }
     // then a printed label (text), e.g. tapping "Nap Rooms"
     if (!best) {
       let ba = 4000; // pt²: only label-sized boxes, not whole areas
       const hits = [];
       for (const it of here) {
-        if (S.cat && it.category !== S.cat) continue;
+        if (S.cat && !inCat(it, S.cat)) continue;
         for (const [bx, by, bw, bh] of it.labelBoxes || []) {
           if (wx < bx || wx > bx + bw || wy < by || wy > by + bh || bw * bh > ba) continue;
           if (bw * bh < ba) { ba = bw * bh; hits.length = 0; }
@@ -1029,14 +1111,14 @@
         }
       }
       // one label shared by several areas of one category (Org fair title): show the category
-      if (hits.length > 1 && hits.every((i) => i.category === hits[0].category) && S.catById[hits[0].category].chip !== false) {
-        selectCat(hits[0].category, { force: true, keepFloor: true });
+      if (hits.length > 1 && hits.every((i) => i.category === hits[0].category) && S.catById[chipOf(hits[0].category)].chip !== false) {
+        selectCat(chipOf(hits[0].category), { force: true, keepFloor: true });
         return;
       }
       best = hits[0] || null;
     }
     if (!best) {
-      const inside = here.filter((i) => i._polys.some((poly) => inPoly(wx, wy, poly)) && (!S.cat || i.category === S.cat))
+      const inside = here.filter((i) => i._polys.some((poly) => inPoly(wx, wy, poly)) && (!S.cat || inCat(i, S.cat)))
         .sort((a, b) => a._area - b._area);
       best = inside[0] || null;
     }
@@ -1106,7 +1188,7 @@
 
   // one result row; the left bar shows the floor's colour (floor.color)
   function resultRow(it, showFloor) {
-    const c = S.catById[it.category], f = S.floorById[it.floor];
+    const c = look(it), f = S.floorById[it.floor];
     const sub = [it.description, showFloor ? f.name : ''].filter(Boolean).join(' · ');
     return `<li style="--floor:${esc(f.color || 'transparent')}"><button data-item="${esc(it.id)}">${catDot(c)}<span><span class="name">${esc(it.name)}</span>` +
       (sub ? `<br><span class="sub">${esc(sub)}</span>` : '') + `</span></button></li>`;
@@ -1116,7 +1198,7 @@
   function syncCatToggle() {
     const cat = S.cat && S.catById[S.cat];
     $('onlyCatWrap').hidden = !cat;
-    if (cat) $('onlyCatLabel').textContent = `Only ${cat.label}`;
+    if (cat) $('onlyCatLabel').textContent = `Only ${catTitle(cat)}`;
     S.searchCat = S.cat;
   }
   const searchCat = () => (S.cat && $('onlyCat').checked ? S.cat : null);
@@ -1125,7 +1207,8 @@
   // grouped by floor, opened at the current floor
   const ROOM_CAT = 'rooms';
   function renderRoomList(ul, cat) {
-    const rooms = S.items.filter((i) => i.category === (cat || ROOM_CAT));
+    // rooms moved to another category (the Spontaneous Conversation Area, in Extra) keep their room-… id and stay listed
+    const rooms = S.items.filter((i) => inCat(i, cat || ROOM_CAT) || (!cat && i.id.startsWith('room-')));
     if (!rooms.length) { ul.innerHTML = `<li class="hint">Type a room name or a meeting point like “C3”.</li>`; return; }
     const floors = S.allFloors ? S.floors : [S.floorById[S.floor]];
     ul.innerHTML = floors.map((f) => {
@@ -1148,7 +1231,7 @@
     const q = $('q').value, ul = $('results');
     S.searchFloor = S.floor;
     const cat = searchCat();
-    const all = search(q).filter((i) => !cat || i.category === cat);
+    const all = search(q).filter((i) => !cat || inCat(i, cat));
     const list = S.allFloors ? all : all.filter((i) => i.floor === S.floor);
     if (!norm(q)) { renderRoomList(ul, cat); return; }
     let html = list.slice(0, 40).map((it) => resultRow(it, S.allFloors)).join('');
@@ -1156,7 +1239,7 @@
     if (!S.allFloors && elsewhere > 0) {
       html += `<li class="hint">${list.length ? '' : 'Nothing on this floor. '}${elsewhere} more on other floors – <button data-all="1">search all floors</button></li>`;
     } else if (!all.length) {
-      html = `<li class="hint">No matches for “${esc(q)}”${cat ? ` in ${esc(S.catById[cat].label)}` : ''}.</li>`;
+      html = `<li class="hint">No matches for “${esc(q)}”${cat ? ` in ${esc(catTitle(S.catById[cat]))}` : ''}.</li>`;
     }
     ul.innerHTML = html;
   }
