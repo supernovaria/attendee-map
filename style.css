@@ -266,3 +266,5 @@ svg { display: block; }
 .link-btn svg { width: 20px; height: 20px; fill: currentColor; }
 /* emoji icons (🔶) sit on a white dot (app.js catDot) */
 svg text.emoji, .cat-dot text.emoji { font: 15px/1 "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+/* item.mapNote: a line under a printed label (Org fair opening hours) */
+svg text.map-note { font: 700 10px system-ui, -apple-system, "Segoe UI", sans-serif; }

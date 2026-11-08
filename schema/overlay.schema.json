@@ -186,6 +186,10 @@
             "type": "number",
             "description": "Optional. Position in a cardList category's card (smaller first); default after the numbered ones, by floor."
           },
+          "mapNote": {
+            "type": "string",
+            "description": "Optional. A short line the viewer writes under the item's printed label (last labelBoxes entry), e.g. opening hours."
+          },
           "id": {
             "$ref": "#/$defs/id"
           },

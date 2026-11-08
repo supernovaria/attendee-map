@@ -1,6 +1,6 @@
 {
  "schemaVersion": 1,
- "updated": "2026-11-08T12:24:20+01:00",
+ "updated": "2026-11-08T13:12:02+01:00",
  "source": "import:source/attendee-map.pdf",
  "floors": [
   {
@@ -126,6 +126,14 @@
    ],
    "icon": "star",
    "color": "#0F9D8A",
+   "enabled": true
+  },
+  {
+   "id": "care",
+   "label": "Rest & care",
+   "link": "napping",
+   "icon": "quiet",
+   "color": "#3949AB",
    "enabled": true
   },
   {

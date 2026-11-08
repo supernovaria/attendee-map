@@ -76,6 +76,15 @@
         "chat"
       ],
       "cardList": true
+    },
+    "care": {
+      "aliases": [
+        "rest",
+        "quiet",
+        "care",
+        "family"
+      ],
+      "cardList": true
     }
   },
   "items": {
@@ -99,7 +108,7 @@
       "category": "extra",
       "icon": "chat",
       "color": "#84CC3D",
-      "order": 3,
+      "order": 4,
       "aliases": [
         "Spontaneous Conversations",
         "conversations",
@@ -208,8 +217,15 @@
       "aliases": [
         "children",
         "childcare",
-        "kids"
-      ]
+        "kids",
+        "Austen",
+        "Kids Room"
+      ],
+      "category": "care",
+      "name": "Childcare · Austen",
+      "icon": "kids",
+      "color": "#EC407A",
+      "order": 4
     },
     "room-kepler": {
       "aliases": [
@@ -220,29 +236,53 @@
       "aliases": [
         "quiet",
         "work",
-        "laptop"
-      ]
+        "laptop",
+        "Silent Working Room",
+        "charging"
+      ],
+      "category": "extra",
+      "name": "Silent Working & Charging",
+      "icon": "laptop",
+      "color": "#546E7A",
+      "order": 2
     },
     "room-nap-rooms": {
       "aliases": [
         "sleep",
         "rest",
         "quiet"
-      ]
+      ],
+      "category": "care",
+      "icon": "quiet",
+      "color": "#3949AB",
+      "order": 1
     },
     "room-prayer-room": {
       "aliases": [
         "pray",
-        "quiet"
-      ]
+        "quiet",
+        "meditation",
+        "Prayer Room"
+      ],
+      "category": "care",
+      "name": "Prayer and Meditation Room",
+      "icon": "meditate",
+      "color": "#8D6E63",
+      "order": 2
     },
     "room-parents-room": {
       "aliases": [
         "baby",
         "nursing",
         "breastfeeding",
-        "changing"
-      ]
+        "changing",
+        "Parents Room"
+      ],
+      "category": "care",
+      "name": "Parents' Room",
+      "icon": "stroller",
+      "color": "#0097A7",
+      "order": 3
     },
     "room-humboldt-hall": {
       "aliases": [
@@ -315,7 +355,9 @@
     "org-fair-area-0": {
       "icon": "booth",
       "color": "#F9317C",
-      "order": 1
+      "order": 1,
+      "description": "Saturday, 14:30–16:30",
+      "mapNote": "Saturday, 14:30–16:30"
     },
     "charging-0": {
       "icon": "bolt",
@@ -325,7 +367,7 @@
     "museum-0": {
       "icon": "museum",
       "color": "#2076EC",
-      "order": 2
+      "order": 3
     }
   },
   "add": [],
@@ -337,6 +379,7 @@
     "lifts",
     "fairs",
     "extra",
+    "care",
     "rooms"
   ],
   "_decisions": [
@@ -345,6 +388,8 @@
     "2 Nov 2026: English UI only. Coat check / registration / first aid / quiet rooms: searchable as rooms is enough, no extra categories.",
     "3 Nov 2026: Share button works on Emily's phone. Meal times added to catering (Fri dinner 18:00-19:00 Cafeteria + 3rd floor only; Sat/Sun lunch 12:30-14:30 all three). Museum exhibition gets its own category chip (waiting for the Canva PDF).",
     "8 Nov 2026: new Canva PDF (museum, catering boxes). Chip order: meeting points, toilets, food, stairs & lifts (one chip), fairs & booths (Org fair + Project fair + Effektiv Spenden/GWWC in one category), charging, AIS Museum. Category colours match the printed boxes (catering red, fairs pink, museum blue, charging orange).",
-    "8 Nov 2026 (later): Charging, AIS Museum and the Spontaneous Conversation Area (2nd floor, was only a room) merged into one 'Extra' chip, listed like Fairs & booths. Item ids unchanged; old ?cat=charging / museum / inspecting links open Extra."
+    "8 Nov 2026 (later): Charging, AIS Museum and the Spontaneous Conversation Area (2nd floor, was only a room) merged into one 'Extra' chip, listed like Fairs & booths. Item ids unchanged; old ?cat=charging / museum / inspecting links open Extra.",
+    "8 Nov 2026 (later): fair boxes always shown, like catering and museum (owner). Org fair hours 'Saturday, 14:30–16:30' under its label on the map (item mapNote) and on its card.",
+    "8 Nov 2026 (later): new 'Rest & care' chip (link napping): Nap Rooms, Prayer and Meditation Room, Parents' Room, Childcare (Austen Kids Room). Silent Working Room joins Extras after Charging. Item ids unchanged."
   ]
 }

@@ -192,6 +192,14 @@
       "enabled": true
     },
     {
+      "id": "care",
+      "label": "Rest & care",
+      "link": "napping",
+      "icon": "quiet",
+      "color": "#3949AB",
+      "enabled": true
+    },
+    {
       "id": "rooms",
       "label": "Rooms",
       "link": "room",
@@ -586,9 +594,7 @@
     1191
   ],
   "titleMaxY": 212,
-  "boxesOnlyWhenSelected": [
-    "fairs"
-  ],
+  "boxesOnlyWhenSelected": [],
   "_labelCategoriesComment": "Printed labels that name a category. id = the item id's start (item ids end up in QR codes: don't change it once printed); name/aliases = what the app shows and finds; nameNearestRoom = add the nearest room's name ('Catering · Cafeteria'); needsBox = only an area box counts (no pin at the label).",
   "areaBoxes": [
     {

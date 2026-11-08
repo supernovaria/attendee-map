@@ -1,6 +1,6 @@
 {
  "schemaVersion": 1,
- "updated": "2026-11-08T12:24:20+01:00",
+ "updated": "2026-11-08T13:12:02+01:00",
  "floors": [
   {
    "id": "0",
@@ -183,6 +183,20 @@
     "conversations",
     "networking",
     "chat"
+   ],
+   "cardList": true
+  },
+  {
+   "id": "care",
+   "label": "Rest & care",
+   "link": "napping",
+   "icon": "quiet",
+   "color": "#3949AB",
+   "aliases": [
+    "rest",
+    "quiet",
+    "care",
+    "family"
    ],
    "cardList": true
   },
@@ -429,7 +443,9 @@
    ],
    "icon": "booth",
    "color": "#F9317C",
-   "order": 1
+   "order": 1,
+   "description": "Saturday, 14:30–16:30",
+   "mapNote": "Saturday, 14:30–16:30"
   },
   {
    "id": "museum-0",
@@ -541,7 +557,7 @@
    ],
    "icon": "museum",
    "color": "#2076EC",
-   "order": 2
+   "order": 3
   },
   {
    "id": "food-0",
@@ -1645,11 +1661,13 @@
   {
    "id": "room-prayer-room",
    "floor": "0",
-   "category": "rooms",
-   "name": "Prayer Room",
+   "category": "care",
+   "name": "Prayer and Meditation Room",
    "aliases": [
     "pray",
-    "quiet"
+    "quiet",
+    "meditation",
+    "Prayer Room"
    ],
    "pin": [
     391.4,
@@ -1683,18 +1701,22 @@
       865.3
      ]
     ]
-   }
+   },
+   "icon": "meditate",
+   "color": "#8D6E63",
+   "order": 2
   },
   {
    "id": "room-parents-room",
    "floor": "0",
-   "category": "rooms",
-   "name": "Parents Room",
+   "category": "care",
+   "name": "Parents' Room",
    "aliases": [
     "baby",
     "nursing",
     "breastfeeding",
-    "changing"
+    "changing",
+    "Parents Room"
    ],
    "pin": [
     382.1,
@@ -1728,12 +1750,15 @@
       890.7
      ]
     ]
-   }
+   },
+   "icon": "stroller",
+   "color": "#0097A7",
+   "order": 3
   },
   {
    "id": "room-nap-rooms",
    "floor": "0",
-   "category": "rooms",
+   "category": "care",
    "name": "Nap Rooms",
    "aliases": [
     "sleep",
@@ -1840,7 +1865,10 @@
       ]
      ]
     }
-   ]
+   ],
+   "icon": "quiet",
+   "color": "#3949AB",
+   "order": 1
   },
   {
    "id": "mp-c2",
@@ -4028,17 +4056,19 @@
    },
    "icon": "chat",
    "color": "#84CC3D",
-   "order": 3
+   "order": 4
   },
   {
    "id": "room-austen",
    "floor": "2",
-   "category": "rooms",
-   "name": "Austen",
+   "category": "care",
+   "name": "Childcare · Austen",
    "aliases": [
     "children",
     "childcare",
-    "kids"
+    "kids",
+    "Austen",
+    "Kids Room"
    ],
    "pin": [
     305.7,
@@ -4085,7 +4115,10 @@
       337.3
      ]
     ]
-   }
+   },
+   "icon": "kids",
+   "color": "#EC407A",
+   "order": 4
   },
   {
    "id": "room-darwin",
@@ -5100,12 +5133,14 @@
   {
    "id": "room-silent-working-room",
    "floor": "3",
-   "category": "rooms",
-   "name": "Silent working room",
+   "category": "extra",
+   "name": "Silent Working & Charging",
    "aliases": [
     "quiet",
     "work",
-    "laptop"
+    "laptop",
+    "Silent Working Room",
+    "charging"
    ],
    "pin": [
     631.3,
@@ -5167,7 +5202,10 @@
       333.3
      ]
     ]
-   }
+   },
+   "icon": "laptop",
+   "color": "#546E7A",
+   "order": 2
   },
   {
    "id": "room-third-floor-foyer",

@@ -598,7 +598,7 @@ def box_rect(b):
     return pymupdf.Rect(b[0], b[1], b[0] + b[2], b[1] + b[3])
 
 
-def label_layer(page, fid, plan_seq, covers, drop, sel, chrome, pins, items):
+def label_layer(page, fid, plan_seq, covers, drop, sel, chrome, pins, items, box_ops=None):
     """SVG text of the label layer for one floor.
     plan_seq: draw numbers of the plan picture; covers: covering_images();
     drop: draw numbers left out (Canva boxes painted into the plan, hidden arrows);
@@ -625,6 +625,8 @@ def label_layer(page, fid, plan_seq, covers, drop, sel, chrome, pins, items):
     def tag(o):
         if o["seq"] in sel:
             return ("sel", sel[o["seq"]])
+        if o["seq"] in (box_ops or {}):
+            return ("box", box_ops[o["seq"]])
         if any(overlap(o["bbox"], c) >= 0.5 for c in chrome_r):
             return ("chrome", "")
         found = []  # (item id, area of the smallest of its boxes that holds the element)
@@ -726,6 +728,7 @@ def label_layer(page, fid, plan_seq, covers, drop, sel, chrome, pins, items):
                 body.append("</g>")
             kind, val = t
             body.append({"sel": f'<g data-sel="{val}">', "chrome": '<g class="chrome">',
+                         "box": f'<g data-i="{val}" class="box">',
                          "items": f'<g data-i="{val}">' if val else "<g>"}[kind])
             open_tag = t
         n = 0
@@ -782,7 +785,7 @@ def label_layer(page, fid, plan_seq, covers, drop, sel, chrome, pins, items):
         rgb = hexrgb(col) * 255
         drk = darken(np.array([[np.round(rgb)]], np.uint8))[0, 0].astype(float)
         for mode, c in (("", rgb), (".dark ", drk)):
-            for state, v in (("", c), (".off ", np.full(3, (c * luma).sum()))):
+            for state, v in (("", c), (".off:not(.box) ", np.full(3, (c * luma).sum()))):
                 css.append(f"{mode}.vl-{fid} {state}.f{n}{{fill:{hx(v)}}}{mode}.vl-{fid} {state}.s{n}{{stroke:{hx(v)}}}")
     W, H = fnum(page.rect.width), fnum(page.rect.height)
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">\n'
@@ -1174,6 +1177,7 @@ def main():
         # 2. vector data
         covers = covering_images(page)
         sel = {}  # draw number -> item id: printed only while that item is selected
+        box_ops = {}  # draw number -> item id: a printed area box (faded, not greyed)
         # arrows switched off in the config (hiddenArrows: floor -> arrow tips):
         # left out of the label layer (step 6)
         arrows = []
@@ -1309,20 +1313,22 @@ def main():
                 "labelBoxes": [xywh(a["rect"], 4) for a in areas] + [xywh(b["bbox"])],
             }
             items.append(it)
-            if c in CFG.get("boxesOnlyWhenSelected", []):
-                # the printed box (its outline and its see-through fill, which Canva
-                # writes as a picture of the same size) is only shown while selected.
-                # A box with a thick border is a see-through fill plus a separate
-                # outline path around it, a bit bigger (half the line width; for a
-                # tilted box PyMuPDF's box of the outline is ~18 pt bigger): it counts too.
-                for area in areas:
-                    ar = pymupdf.Rect(area["rect"])
-                    for k, r in enumerate(page.get_bboxlog()):
-                        rr = pymupdf.Rect(r[1])
-                        d = max(abs(x - y) for x, y in zip(rr, ar))
-                        if k == area["drawing"]["seqno"] or r[0] in ("fill-image", "fill-path") and d < 3 \
-                                or r[0] == "stroke-path" and d < 25 and rr.contains(ar):
-                            sel[k] = it["id"]
+            # The printed box's own drawing operations: its outline and its see-through
+            # fill (which Canva writes as a picture of the same size). A box with a
+            # thick border is a see-through fill plus a separate outline path around
+            # it, a bit bigger (half the line width; for a tilted box PyMuPDF's box of
+            # the outline is ~18 pt bigger): it counts too. boxesOnlyWhenSelected:
+            # shown only while selected (sel); else tagged as a box (box_ops), which the
+            # viewer fades but doesn't grey, like the boxes Canva wrote as pictures.
+            dest = sel if c in CFG.get("boxesOnlyWhenSelected", []) else box_ops
+            for area in areas:
+                ar = pymupdf.Rect(area["rect"])
+                for k, r in enumerate(page.get_bboxlog()):
+                    rr = pymupdf.Rect(r[1])
+                    d = max(abs(x - y) for x, y in zip(rr, ar))
+                    if k == area["drawing"]["seqno"] or r[0] in ("fill-image", "fill-path") and d < 3 \
+                            or r[0] == "stroke-path" and d < 25 and rr.contains(ar):
+                        dest[k] = it["id"]
             st[cats[c]["label"] + " boxes"] = st.get(cats[c]["label"] + " boxes", 0) + len(areas)
 
         # 2c. navy pins -> the nearest label that has no box (Project fair; Catering before 8 Nov)
@@ -1507,7 +1513,7 @@ def main():
             "page": page, "fid": fid,
             "plan_seq": {cs for cs, _ in covers}, "covers": covers,
             "drop": {d["seqno"] for d in arrows} | {q for _, _, seqs in cover_boxes for q in seqs},
-            "sel": sel, "chrome": chrome, "pins": [p["seqs"] for p in mpins],
+            "sel": sel, "boxes": box_ops, "chrome": chrome, "pins": [p["seqs"] for p in mpins],
         })
 
     # near-duplicate shades among vector fills vs key colours
@@ -1530,9 +1536,11 @@ def main():
     # 7. the Canva layer as SVG, tagged with the final items (overrides can add labelBoxes)
     for L in layers_todo:
         here = [it for it in final["items"] if it["floor"] == L["fid"]]
-        sel = {k: v for k, v in L["sel"].items() if any(it["id"] == v for it in here)}
+        ids = {it["id"] for it in here}
+        sel = {k: v for k, v in L["sel"].items() if v in ids}
+        bxs = {k: v for k, v in L["boxes"].items() if v in ids}
         svg = label_layer(L["page"], L["fid"], L["plan_seq"], L["covers"], L["drop"], sel,
-                          L["chrome"], L["pins"], here)
+                          L["chrome"], L["pins"], here, bxs)
         (MAPS_DIR / f"{L['fid']}-labels.svg").write_text(svg, encoding="utf-8", newline="\n")
     OUT_FINAL.parent.mkdir(exist_ok=True)
     OUT_FINAL.write_text(json.dumps(final, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")

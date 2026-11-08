@@ -37,6 +37,10 @@
     registration: 'M4 4h16v16H4zm2 2v12h12V6zm2 2h8v2H8zm0 4h8v2H8z',
     museum: 'M12 2 2 7v2h20V7zM4 10.5h2.5V18H4zm4.75 0h2.5V18h-2.5zm4 0h2.5V18h-2.5zm4.75 0H20V18h-2.5zM2 19.5h20V22H2z',
     dot: 'M12 6a6 6 0 1 1 0 12 6 6 0 0 1 0-12z',
+    laptop: 'M20 18c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4z', // silent working
+    meditate: 'M12 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm9 14v-2c-2.24 0-4.16-.96-5.6-2.68l-1.34-1.6A1.98 1.98 0 0 0 12.53 9h-1.05c-.59 0-1.15.26-1.53.72l-1.34 1.6C7.16 13.04 5.24 14 3 14v2c2.77 0 5.19-1.17 7-3.25V15l-3.88 1.55c-.67.27-1.12.93-1.12 1.66C5 19.2 5.8 20 6.79 20H9v-.5a2.5 2.5 0 0 1 2.5-2.5h3c.28 0 .5.22.5.5s-.22.5-.5.5h-3c-.83 0-1.5.67-1.5 1.5v.5h7.21c.99 0 1.79-.8 1.79-1.79 0-.73-.45-1.39-1.12-1.66L14 15v-2.25c1.81 2.08 4.23 3.25 7 3.25z', // prayer and meditation
+    stroller: 'M13 2v8h8c0-4.42-3.58-8-8-8zm6.32 13.89C20.37 14.54 21 12.84 21 11H6.44l-.95-2H2v2h2.22s1.89 4.07 2.12 4.42c-1.1.59-1.84 1.75-1.84 3.08C4.5 20.43 6.07 22 8 22c1.76 0 3.22-1.3 3.46-3h2.08c.24 1.7 1.7 3 3.46 3 1.93 0 3.5-1.57 3.5-3.5 0-1.04-.46-1.97-1.18-2.61zM8 20c-.83 0-1.5-.67-1.5-1.5S7.17 17 8 17s1.5.67 1.5 1.5S8.83 20 8 20zm9 0c-.83 0-1.5-.67-1.5-1.5S16.17 17 17 17s1.5.67 1.5 1.5S17.83 20 17 20z', // parents
+    kids: 'M9 11.75a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5zm6 0a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8 0-.29.02-.58.05-.86 2.36-1.05 4.23-2.98 5.21-5.37A9.97 9.97 0 0 0 19.67 9.74c.21.71.33 1.47.33 2.26 0 4.41-3.59 8-8 8z', // childcare
     star: 'M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z', // Extra
     chat: 'M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z', // conversations
     diamond: { emoji: '🔶' }, // donations (Effektiv Spenden & GWWC)
@@ -264,12 +268,29 @@
   // label/pin it is, data-sel = shown only while that item is selected (Org
   // fair boxes), class="chrome" = title and legend. Colours are classes; the
   // file's own <style> has their grey (.off) and dark-mode (svg.dark) versions.
+  // item.mapNote: a line of text under the item's printed label, left-aligned like it (the Org fair's
+  // opening hours), in the label's colour class, as a run of its own tagged
+  // with the item, so it greys, fades and recolours with the label
+  function addMapNotes(f, g) {
+    const top = [...g.children].find((n) => n.localName === 'g');
+    if (!top) return;
+    for (const it of S.items) {
+      if (it.floor !== f.id || !it.mapNote || !Array.isArray(it.labelBoxes) || !it.labelBoxes.length) continue;
+      const [x, y, w, h] = it.labelBoxes[it.labelBoxes.length - 1]; // the label itself
+      const label = [...top.children].find((r) => (r.getAttribute('data-i') || '').split(' ').includes(it.id) && r.querySelector('use'));
+      const cls = label?.querySelector('use')?.getAttribute('class') || '';
+      const run = el('g', { 'data-i': it.id }, top);
+      const t = el('text', { x, y: y + h + 13, class: `map-note ${cls}` }, run);
+      t.textContent = it.mapNote;
+    }
+  }
   function vectorLabels(f) {
     const g = el('g', {}, labelLayer);
     fetch(f.labels).then((r) => { if (!r.ok) throw new Error(r.status); return r.text(); }).then((txt) => {
       const root = new DOMParser().parseFromString(txt, 'image/svg+xml').documentElement;
       if (root.localName !== 'svg') throw new Error('not an SVG');
       for (const n of [...root.childNodes]) g.appendChild(document.importNode(n, true));
+      addMapNotes(f, g);
       const runs = [];
       for (const top of g.children) {
         if (top.localName !== 'g') continue;
