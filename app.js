@@ -721,12 +721,16 @@
     for (const it of S.items) {
       if (it.floor !== S.floor || it.category !== 'stairs') continue;
       const txt = stairBadge(it);
-      if (!txt || S.item === it.id) continue; // selected: its marker stands here and the card says it
-      const g = el('g', { class: 'badge' + (sel && !sel.has(it) ? ' off' : ''), transform: `translate(${x + k * it.pin[0]} ${y + k * it.pin[1]})` }, markerLayer);
-      const r = el('rect', { y: -8, height: 16, rx: 8 }, g);
+      if (!txt) continue;
+      // the selected staircase: a bigger badge just below its marker's tip
+      const big = S.item === it.id, h = big ? 24 : 19;
+      const [ax, ay] = big ? markerSpot(it) : it.pin;
+      const g = el('g', { class: 'badge' + (big ? ' big' : sel && !sel.has(it) ? ' off' : ''),
+        transform: `translate(${x + k * ax} ${y + k * ay + (big ? 4 + h / 2 : 0)})` }, markerLayer);
+      const r = el('rect', { y: -h / 2, height: h, rx: h / 2 }, g);
       const t = el('text', { x: 0, y: 0.5 }, g);
       t.textContent = txt;
-      const w = (t.getComputedTextLength() || 7 * txt.length) + 10;
+      const w = (t.getComputedTextLength() || (big ? 9 : 7.5) * txt.length) + (big ? 16 : 12);
       r.setAttribute('x', -w / 2); r.setAttribute('width', w);
     }
   }
