@@ -79,9 +79,19 @@ def previews(width, write):
     return out
 
 
+def goes_to(it, floors):
+    """Stairs and lifts: "Goes to the 2nd and 3rd floors" from connects (same wording as goesTo in app.js)."""
+    fs = sorted((floors[i] for i in it.get("connects") or [] if i in floors), key=lambda f: f.get("order", 0))
+    w = [(f.get("shortName") or f["name"]).lower().removesuffix(" floor") for f in fs]
+    if not w:
+        return ""
+    lst = f"{', '.join(w[:-1])} and {w[-1]}" if len(w) > 1 else w[0]
+    return f"Goes to the {lst} floor{'s' if len(w) > 1 else ''}"
+
+
 def item_text(it, floors, cats):
     floor = floors[it["floor"]]["name"]
-    extra = it.get("description") or cats.get(it["category"], "")
+    extra = " · ".join(x for x in (goes_to(it, floors), it.get("description")) if x) or cats.get(it["category"], "")
     return it["name"], f"{floor} · {extra}" if extra and extra != it["name"] else floor
 
 

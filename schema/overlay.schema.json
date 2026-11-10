@@ -258,7 +258,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Optional, for stairs and lifts: ids of the other floors it goes to. Used by 'How to get here' to pick the right ones."
+            "description": "Optional, for stairs and lifts: ids of the other floors it goes to ([] = none). Shown as 'Goes to …' on the card and as a badge on stairs; used by 'How to get here' to pick the right ones."
           }
         }
       }

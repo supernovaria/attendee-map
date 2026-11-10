@@ -1401,8 +1401,7 @@ def main():
                 }
                 if c == "lifts":
                     lab = lift_label(page, reg, lines)
-                    if lab:
-                        it["description"] = f"Goes to floors {lab}"
+                    if lab:  # the card's "Goes to …" line is written by the viewer from connects
                         it["connects"] = sorted(set(re.findall(r"\d", lab)) - {fid})
                 items.append(it)
             st[key["name"]] = len(regs)

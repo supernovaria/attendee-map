@@ -696,9 +696,44 @@
     const b = (it.labelBoxes || []).find(([bx, by, bw, bh]) => px >= bx && px <= bx + bw && py >= by && py <= by + bh);
     return b ? [b[0] + b[2] / 2, b[1]] : it.pin;
   }
+  // stairs and lifts: where they go, from item.connects ("Goes to the 2nd and 3rd floor")
+  const floorsOf = (it) => (Array.isArray(it.connects) ? it.connects : []).map((id) => S.floorById[id]).filter(Boolean)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  function goesTo(it) {
+    const fs = floorsOf(it);
+    if (!fs.length) return '';
+    const w = fs.map((f) => (f.shortName || f.name).toLowerCase().replace(/ floor$/, ''));
+    const list = w.length > 1 ? `${w.slice(0, -1).join(', ')} and ${w[w.length - 1]}` : w[0];
+    return `Goes to the ${list} floor${w.length > 1 ? 's' : ''}`;
+  }
+  const describe = (it) => [goesTo(it), it.description].filter(Boolean).join(' · ');
+  // the badge on each staircase: "↑2 3", "↓0 ↑3" (floor numbers as on the lift buttons)
+  function stairBadge(it) {
+    const here = S.floorById[it.floor].order ?? 0;
+    const fs = floorsOf(it);
+    const dn = fs.filter((f) => (f.order ?? 0) < here).map((f) => f.id);
+    const up = fs.filter((f) => (f.order ?? 0) > here).map((f) => f.id);
+    return [dn.length ? '↓' + dn.join(' ') : '', up.length ? '↑' + up.join(' ') : ''].filter(Boolean).join(' ');
+  }
+  function placeBadges() {
+    const { k, x, y } = S.view;
+    const sel = S.hl && (S.item || S.cat || S.way) ? new Set(S.hl) : null;
+    for (const it of S.items) {
+      if (it.floor !== S.floor || it.category !== 'stairs') continue;
+      const txt = stairBadge(it);
+      if (!txt || S.item === it.id) continue; // selected: its marker stands here and the card says it
+      const g = el('g', { class: 'badge' + (sel && !sel.has(it) ? ' off' : ''), transform: `translate(${x + k * it.pin[0]} ${y + k * it.pin[1]})` }, markerLayer);
+      const r = el('rect', { y: -8, height: 16, rx: 8 }, g);
+      const t = el('text', { x: 0, y: 0.5 }, g);
+      t.textContent = txt;
+      const w = (t.getComputedTextLength() || 7 * txt.length) + 10;
+      r.setAttribute('x', -w / 2); r.setAttribute('width', w);
+    }
+  }
   function placeMarkers() {
     markerLayer.innerHTML = '';
     const { k, x, y } = S.view;
+    placeBadges();
     if (S.here && S.here.floor === S.floor) {
       // "You are here": blue dot with a label, always on top of the plan
       const g = el('g', { class: 'here', transform: `translate(${x + k * S.here.pin[0]} ${y + k * S.here.pin[1]})` }, markerLayer);
@@ -775,7 +810,7 @@
         .map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('');
       const links = `<div class="links">${shareBtn(it.id)}${ext}${allBtn}</div>`;
       sh.innerHTML = `${dotBtn(look(it), 'Show it on the map')}<div class="grow"><div class="name">${esc(it.name)}</div>` +
-        `<div class="sub">${esc([it.description, c.label, S.floorById[it.floor].name].filter(Boolean).join(' · '))}</div>${links}</div>${close}`;
+        `<div class="sub">${esc([describe(it), c.label, S.floorById[it.floor].name].filter(Boolean).join(' · '))}</div>${links}</div>${close}`;
     } else if (cat) {
       const n = hl.length;
       const pills = floorPills(floorsWithCat);
@@ -1210,7 +1245,7 @@
   // one result row; the left bar shows the floor's colour (floor.color)
   function resultRow(it, showFloor) {
     const c = look(it), f = S.floorById[it.floor];
-    const sub = [it.description, showFloor ? f.name : ''].filter(Boolean).join(' · ');
+    const sub = [describe(it), showFloor ? f.name : ''].filter(Boolean).join(' · ');
     return `<li style="--floor:${esc(f.color || 'transparent')}"><button data-item="${esc(it.id)}">${catDot(c)}<span><span class="name">${esc(it.name)}</span>` +
       (sub ? `<br><span class="sub">${esc(sub)}</span>` : '') + `</span></button></li>`;
   }

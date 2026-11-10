@@ -117,7 +117,6 @@
       ]
     },
     "lifts-2": {
-      "description": "Goes to floors 0, 1, 3",
       "_why": "Label only present as hidden text on the 2nd-floor page; consistent with the main lift on other floors.",
       "connects": [
         "0",
@@ -318,6 +317,23 @@
     },
     "room-voltaire": {
       "_why": "Split from the foyer by the divider at y 599.5 (scripts/import-config.json). Traced by the import since 5 Nov 2026, incl. stage; was hand-traced."
+    },
+    "stairs-0-2": {
+      "connects": ["2", "3"],
+      "_why": "Owner, 10 Nov 2026: same staircase as stairs-2-2 and stairs-3-2; goes to the 2nd and 3rd floor, not the 1st."
+    },
+    "stairs-1-3": {
+      "connects": [],
+      "description": "Between the cafeteria and the 1st-floor foyer",
+      "_why": "Owner, 10 Nov 2026: a few steps between two parts of the 1st floor, no other floor."
+    },
+    "stairs-2-2": {
+      "connects": ["0", "3"],
+      "_why": "Owner, 10 Nov 2026: same staircase as stairs-0-2; ground, 2nd and 3rd floor, not the 1st."
+    },
+    "stairs-3-2": {
+      "connects": ["0", "2"],
+      "_why": "Owner, 10 Nov 2026: same staircase as stairs-0-2; ground, 2nd and 3rd floor, not the 1st."
     },
     "stairs-1-4": {
       "connects": [

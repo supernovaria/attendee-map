@@ -1,6 +1,6 @@
 {
  "schemaVersion": 1,
- "updated": "2026-11-08T13:12:02+01:00",
+ "updated": "2026-11-10T15:29:27+01:00",
  "source": "import:source/attendee-map.pdf",
  "floors": [
   {
@@ -951,7 +951,6 @@
     724.7,
     350.2
    ],
-   "description": "Goes to floors 1, 2, 3",
    "connects": [
     "1",
     "2",
@@ -996,7 +995,6 @@
     452.9,
     684.5
    ],
-   "description": "Goes to floors 1",
    "connects": [
     "1"
    ],
@@ -2638,7 +2636,6 @@
     672.3,
     355.3
    ],
-   "description": "Goes to floors 0, 2, 3",
    "connects": [
     "0",
     "2",
@@ -2683,7 +2680,6 @@
     408.0,
     680.0
    ],
-   "description": "Goes to floors 0",
    "connects": [
     "0"
    ],
@@ -5244,7 +5240,6 @@
     529.3,
     482.3
    ],
-   "description": "Goes to floors 0, 1, 2",
    "connects": [
     "0",
     "1",
