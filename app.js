@@ -717,7 +717,6 @@
   }
   function placeBadges() {
     const { k, x, y } = S.view;
-    const sel = S.hl && (S.item || S.cat || S.way) ? new Set(S.hl) : null;
     for (const it of S.items) {
       if (it.floor !== S.floor || it.category !== 'stairs') continue;
       const txt = stairBadge(it);
@@ -725,7 +724,7 @@
       // the selected staircase: a bigger badge just below its marker's tip
       const big = S.item === it.id, h = big ? 24 : 19;
       const [ax, ay] = big ? markerSpot(it) : it.pin;
-      const g = el('g', { class: 'badge' + (big ? ' big' : sel && !sel.has(it) ? ' off' : ''),
+      const g = el('g', { class: 'badge' + (big ? ' big' : ''), // never faded: people look for stairs while something else is selected
         transform: `translate(${x + k * ax} ${y + k * ay + (big ? 4 + h / 2 : 0)})` }, markerLayer);
       const r = el('rect', { y: -h / 2, height: h, rx: h / 2 }, g);
       const t = el('text', { x: 0, y: 0.5 }, g);

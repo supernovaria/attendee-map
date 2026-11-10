@@ -176,7 +176,6 @@ svg { display: block; }
 .badge text { fill: #1b1b1b; font: 700 12.5px system-ui, sans-serif; text-anchor: middle; dominant-baseline: central; }
 .badge.big text { font-size: 16px; }
 .badge.big rect { stroke-width: 2; }
-.badge.off { opacity: .35; }
 .marker text { fill: #fff; font: 700 9px system-ui, sans-serif; text-anchor: middle; dominant-baseline: central; }
 .marker { pointer-events: none; }
 /* "You are here" (?here=): blue dot, soft breathing halo, label underneath */

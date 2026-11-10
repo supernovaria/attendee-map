@@ -246,6 +246,8 @@
       "order": 2
     },
     "room-nap-rooms": {
+      "shapes": [{"type": "polygon", "points": [[155.3, 939.7], [142.0, 975.7], [168.0, 985.3], [179.7, 953.7], [174.0, 951.3], [170.3, 945.3]]}, {"type": "polygon", "points": [[182.3, 955.7], [171.0, 986.3], [195.7, 996.0], [209.0, 961.7], [194.3, 956.0], [188.0, 957.0]]}, {"type": "polygon", "points": [[285.0, 994.0], [272.7, 1024.7], [298.7, 1035.0], [312.3, 999.0], [297.7, 993.3], [295.0, 995.3]]}, {"type": "polygon", "points": [[259.0, 974.6], [285.8, 983.8], [270.8, 1025.4], [240.8, 1013.3], [242.5, 1006.7], [246.7, 1006.7]]}],
+      "_why_shapes": "Owner, 10 Nov 2026: the room between the toilets and the right-hand nap room is a nap room too (4th shape, hand-traced). The import followed only 3 of the label's 4 lines; the first 3 shapes are its outlines.",
       "aliases": [
         "sleep",
         "rest",
